@@ -1,5 +1,5 @@
 # ============================================================
-# DIABETES RISK PREDICTION
+# DIABETES RISK INTELLIGENCE
 # Streamlit Clinical Screening Dashboard
 #
 # Author: Olalemi Olaoluwakintan Emmanuel
@@ -10,7 +10,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import matplotlib.pyplot as plt
 
 from pathlib import Path
 from datetime import datetime
@@ -66,6 +65,22 @@ CONFUSION_MATRIX = {
 
 
 # ============================================================
+# EXPECTED FEATURES
+# ============================================================
+
+EXPECTED_FEATURES = [
+    "Pregnancies",
+    "Glucose",
+    "BloodPressure",
+    "SkinThickness",
+    "Insulin",
+    "BMI",
+    "DiabetesPedigreeFunction",
+    "Age"
+]
+
+
+# ============================================================
 # CUSTOM CSS
 # ============================================================
 
@@ -73,7 +88,9 @@ st.markdown(
     """
     <style>
 
-    /* ---------- GLOBAL ---------- */
+    /* ========================================================
+       GLOBAL
+       ======================================================== */
 
     .stApp {
         background-color: #f7f9fc;
@@ -83,7 +100,9 @@ st.markdown(
         padding-top: 1rem;
     }
 
-    /* ---------- HEADER ---------- */
+    /* ========================================================
+       HEADER
+       ======================================================== */
 
     .hero {
         padding: 1.8rem 2rem;
@@ -110,7 +129,9 @@ st.markdown(
         margin-bottom: 0;
     }
 
-    /* ---------- CARDS ---------- */
+    /* ========================================================
+       CARDS
+       ======================================================== */
 
     .info-card {
         background: white;
@@ -147,7 +168,9 @@ st.markdown(
         font-size: 0.9rem;
     }
 
-    /* ---------- RESULT ---------- */
+    /* ========================================================
+       RESULT CARDS
+       ======================================================== */
 
     .risk-high {
         padding: 1.4rem;
@@ -173,7 +196,9 @@ st.markdown(
         margin: 1rem 0;
     }
 
-    /* ---------- DISCLAIMER ---------- */
+    /* ========================================================
+       DISCLAIMER
+       ======================================================== */
 
     .disclaimer {
         padding: 1rem 1.2rem;
@@ -184,7 +209,9 @@ st.markdown(
         margin: 1rem 0;
     }
 
-    /* ---------- FOOTER ---------- */
+    /* ========================================================
+       FOOTER
+       ======================================================== */
 
     .footer {
         text-align: center;
@@ -193,7 +220,9 @@ st.markdown(
         font-size: 0.85rem;
     }
 
-    /* ---------- SIDEBAR ---------- */
+    /* ========================================================
+       SIDEBAR
+       ======================================================== */
 
     section[data-testid="stSidebar"] {
         background-color: #ffffff;
@@ -213,17 +242,24 @@ st.markdown(
 def load_model():
 
     if not MODEL_PATH.exists():
-        return None
+
+        return None, (
+            f"Model file not found: {MODEL_PATH.name}. "
+            f"Make sure it is in the same folder as app.py."
+        )
 
     try:
-        return joblib.load(MODEL_PATH)
+
+        loaded_model = joblib.load(MODEL_PATH)
+
+        return loaded_model, None
 
     except Exception as error:
-        st.error(f"Model loading error: {error}")
-        return None
+
+        return None, str(error)
 
 
-model = load_model()
+model, model_error = load_model()
 
 
 # ============================================================
@@ -234,16 +270,23 @@ model = load_model()
 def load_dataset():
 
     if not DATA_PATH.exists():
-        return None
+
+        return None, (
+            f"Dataset file not found: {DATA_PATH.name}."
+        )
 
     try:
-        return pd.read_csv(DATA_PATH)
 
-    except Exception:
-        return None
+        loaded_data = pd.read_csv(DATA_PATH)
+
+        return loaded_data, None
+
+    except Exception as error:
+
+        return None, str(error)
 
 
-data = load_dataset()
+data, data_error = load_dataset()
 
 
 # ============================================================
@@ -276,11 +319,25 @@ with st.sidebar:
 
     st.markdown("### Model")
 
-    st.write("**Algorithm:** Logistic Regression")
+    st.write(
+        "**Algorithm:** Logistic Regression"
+    )
 
     st.write(
         "**Pipeline:**\n"
         "StandardScaler → SMOTE → Logistic Regression"
+    )
+
+    st.divider()
+
+    model_status = (
+        "🟢 Loaded"
+        if model is not None
+        else "🔴 Not Loaded"
+    )
+
+    st.write(
+        f"**Model Status:** {model_status}"
     )
 
     st.divider()
@@ -292,7 +349,7 @@ with st.sidebar:
 
 
 # ============================================================
-# HEADER
+# MAIN HEADER
 # ============================================================
 
 st.markdown(
@@ -335,6 +392,23 @@ st.markdown(
 
 
 # ============================================================
+# MODEL ERROR NOTICE
+# ============================================================
+
+if model_error is not None:
+
+    with st.expander("⚠️ Model loading information"):
+
+        st.error(
+            f"Unable to load the model: {model_error}"
+        )
+
+        st.code(
+            str(MODEL_PATH)
+        )
+
+
+# ============================================================
 # PAGE 1 — EXECUTIVE DASHBOARD
 # ============================================================
 
@@ -348,36 +422,85 @@ if page == "🏠 Executive Dashboard":
     )
 
     # --------------------------------------------------------
-    # TOP METRICS
+    # DATASET METRICS
     # --------------------------------------------------------
 
     total_patients = 768
     diabetic = 268
     non_diabetic = 500
 
+    # If the dataset is available, use actual values
+    if data is not None:
+
+        target_column = None
+
+        possible_target_columns = [
+            "outcome(target)",
+            "Outcome",
+            "Outcome(Target)",
+            "outcome",
+            "target",
+            "Target"
+        ]
+
+        for column in possible_target_columns:
+
+            if column in data.columns:
+
+                target_column = column
+                break
+
+        if target_column is not None:
+
+            total_patients = len(data)
+
+            diabetic = int(
+                (data[target_column] == 1).sum()
+            )
+
+            non_diabetic = int(
+                (data[target_column] == 0).sum()
+            )
+
     c1, c2, c3, c4, c5 = st.columns(5)
 
     with c1:
+
         st.metric(
             "Patient Records",
             f"{total_patients:,}"
         )
 
     with c2:
+
+        diabetic_percentage = (
+            diabetic / total_patients * 100
+            if total_patients > 0
+            else 0
+        )
+
         st.metric(
             "Diabetic",
             f"{diabetic:,}",
-            "34.90%"
+            f"{diabetic_percentage:.2f}%"
         )
 
     with c3:
+
+        non_diabetic_percentage = (
+            non_diabetic / total_patients * 100
+            if total_patients > 0
+            else 0
+        )
+
         st.metric(
             "Non-Diabetic",
             f"{non_diabetic:,}",
-            "65.10%"
+            f"{non_diabetic_percentage:.2f}%"
         )
 
     with c4:
+
         st.metric(
             "Optimized Recall",
             "75.93%",
@@ -385,6 +508,7 @@ if page == "🏠 Executive Dashboard":
         )
 
     with c5:
+
         st.metric(
             "ROC-AUC",
             "78.69%"
@@ -436,13 +560,24 @@ if page == "🏠 Executive Dashboard":
             <h3>🔬 Optimization Pipeline</h3>
 
             <p><strong>1.</strong> Feature Scaling</p>
-            <p>StandardScaler brings features onto comparable numerical scales.</p>
+
+            <p>
+            StandardScaler brings features onto comparable
+            numerical scales.
+            </p>
 
             <p><strong>2.</strong> Class Balancing</p>
-            <p>SMOTE generates synthetic minority-class training examples.</p>
+
+            <p>
+            SMOTE generates synthetic minority-class training examples.
+            </p>
 
             <p><strong>3.</strong> Hyperparameter Optimization</p>
-            <p>GridSearchCV evaluates multiple Logistic Regression configurations using F1 scoring.</p>
+
+            <p>
+            GridSearchCV evaluates multiple Logistic Regression
+            configurations using F1 scoring.
+            </p>
 
             </div>
             """,
@@ -463,16 +598,16 @@ if page == "🏠 Executive Dashboard":
             "F1 Score"
         ],
         "Baseline": [
-            0.7013,
-            0.5870,
-            0.5000,
-            0.5400
+            BASELINE_METRICS["Accuracy"],
+            BASELINE_METRICS["Precision"],
+            BASELINE_METRICS["Recall"],
+            BASELINE_METRICS["F1 Score"]
         ],
         "Optimized": [
-            0.6883,
-            0.5395,
-            0.7593,
-            0.6308
+            OPTIMIZED_METRICS["Accuracy"],
+            OPTIMIZED_METRICS["Precision"],
+            OPTIMIZED_METRICS["Recall"],
+            OPTIMIZED_METRICS["F1 Score"]
         ]
     })
 
@@ -492,9 +627,9 @@ if page == "🏠 Executive Dashboard":
     )
 
     st.info(
-        "The optimized model traded some accuracy and precision for a "
-        "substantial improvement in recall. This reflects the project's "
-        "screening-oriented objective."
+        "The optimized model traded some accuracy and precision "
+        "for a substantial improvement in recall. This reflects "
+        "the project's screening-oriented objective."
     )
 
     # --------------------------------------------------------
@@ -531,24 +666,17 @@ if page == "🏠 Executive Dashboard":
         ascending=True
     )
 
-    fig, ax = plt.subplots(figsize=(9, 5))
-
-    ax.barh(
-        feature_values["Feature"],
-        feature_values["Model Coefficient"]
+    # Native Streamlit chart
+    chart_data = feature_values.set_index(
+        "Feature"
     )
 
-    ax.set_title(
-        "Logistic Regression Feature Coefficients"
+    st.bar_chart(
+        chart_data,
+        y="Model Coefficient",
+        horizontal=True,
+        height=450
     )
-
-    ax.set_xlabel("Coefficient")
-
-    plt.tight_layout()
-
-    st.pyplot(fig)
-
-    plt.close(fig)
 
     st.caption(
         "Higher positive coefficients indicate a stronger positive "
@@ -572,10 +700,19 @@ elif page == "🔬 Patient Risk Assessment":
     if model is None:
 
         st.error(
-            "The trained model could not be loaded. "
+            "The trained model could not be loaded."
+        )
+
+        st.info(
             "Place diabetes_risk_prediction_model.pkl "
             "in the same directory as app.py."
         )
+
+        if model_error:
+
+            st.exception(
+                Exception(model_error)
+            )
 
         st.stop()
 
@@ -667,32 +804,63 @@ elif page == "🔬 Patient Risk Assessment":
 
     if submitted:
 
-        patient = pd.DataFrame([{
-            "Pregnancies": pregnancies,
-            "Glucose": glucose,
-            "BloodPressure": blood_pressure,
-            "SkinThickness": skin_thickness,
-            "Insulin": insulin,
-            "BMI": bmi,
-            "DiabetesPedigreeFunction": pedigree,
-            "Age": age
-        }])
+        # ----------------------------------------------------
+        # CREATE PATIENT DATAFRAME
+        # ----------------------------------------------------
+
+        patient = pd.DataFrame(
+            [{
+                "Pregnancies": pregnancies,
+                "Glucose": glucose,
+                "BloodPressure": blood_pressure,
+                "SkinThickness": skin_thickness,
+                "Insulin": insulin,
+                "BMI": bmi,
+                "DiabetesPedigreeFunction": pedigree,
+                "Age": age
+            }],
+            columns=EXPECTED_FEATURES
+        )
 
         try:
+
+            # ------------------------------------------------
+            # MODEL PREDICTION
+            # ------------------------------------------------
 
             prediction = int(
                 model.predict(patient)[0]
             )
 
+            # ------------------------------------------------
+            # PROBABILITY
+            # ------------------------------------------------
+
+            probability = None
+
             if hasattr(model, "predict_proba"):
 
-                probability = float(
-                    model.predict_proba(patient)[0][1]
+                probabilities = model.predict_proba(
+                    patient
                 )
 
-            else:
+                probability = float(
+                    probabilities[0][1]
+                )
 
-                probability = None
+            elif hasattr(model, "decision_function"):
+
+                decision = float(
+                    model.decision_function(patient)[0]
+                )
+
+                probability = float(
+                    1 / (1 + np.exp(-decision))
+                )
+
+            # ------------------------------------------------
+            # RESULT
+            # ------------------------------------------------
 
             st.divider()
 
@@ -700,32 +868,49 @@ elif page == "🔬 Patient Risk Assessment":
 
             if probability is not None:
 
-                probability_percent = probability * 100
+                probability = min(
+                    max(probability, 0.0),
+                    1.0
+                )
+
+                probability_percent = (
+                    probability * 100
+                )
+
+                # Risk band
+                if probability < 0.30:
+
+                    band = "Lower"
+
+                elif probability < 0.60:
+
+                    band = "Intermediate"
+
+                else:
+
+                    band = "Higher"
 
                 r1, r2, r3 = st.columns(3)
 
                 with r1:
+
                     st.metric(
                         "Model Probability",
                         f"{probability_percent:.1f}%"
                     )
 
                 with r2:
+
                     st.metric(
                         "Predicted Class",
-                        "Positive (1)"
-                        if prediction == 1
-                        else "Negative (0)"
+                        (
+                            "Positive (1)"
+                            if prediction == 1
+                            else "Negative (0)"
+                        )
                     )
 
                 with r3:
-
-                    if probability < 0.30:
-                        band = "Lower"
-                    elif probability < 0.60:
-                        band = "Intermediate"
-                    else:
-                        band = "Higher"
 
                     st.metric(
                         "Model Risk Band",
@@ -733,16 +918,15 @@ elif page == "🔬 Patient Risk Assessment":
                     )
 
                 # ------------------------------------------------
-                # PROBABILITY GAUGE
+                # PROBABILITY BAR
                 # ------------------------------------------------
 
-                st.markdown("### Model-Estimated Probability")
+                st.markdown(
+                    "### Model-Estimated Probability"
+                )
 
                 st.progress(
-                    min(
-                        max(probability, 0.0),
-                        1.0
-                    )
+                    probability
                 )
 
                 st.caption(
@@ -816,34 +1000,46 @@ elif page == "🔬 Patient Risk Assessment":
                 # INPUT SUMMARY
                 # ------------------------------------------------
 
-                st.subheader("Patient Input Summary")
+                st.subheader(
+                    "Patient Input Summary"
+                )
+
+                summary = patient.T.rename(
+                    columns={0: "Patient Value"}
+                )
 
                 st.dataframe(
-                    patient.T.rename(
-                        columns={0: "Patient Value"}
-                    ),
+                    summary,
                     use_container_width=True
                 )
 
                 # ------------------------------------------------
-                # DOWNLOAD REPORT
+                # REPORT
                 # ------------------------------------------------
 
                 report = f"""
-DIABETES RISK PREDICTION
+DIABETES RISK INTELLIGENCE
 Machine Learning Screening Report
+============================================================
 
 Assessment Date:
 {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 MODEL RESULT
+------------------------------------------------------------
+
 Predicted Class:
 {"Positive (1)" if prediction == 1 else "Negative (0)"}
 
 Model Probability:
 {probability_percent:.2f}%
 
+Model Risk Band:
+{band}
+
+
 PATIENT INPUTS
+------------------------------------------------------------
 
 Pregnancies: {pregnancies}
 Glucose: {glucose}
@@ -854,33 +1050,78 @@ BMI: {bmi}
 DiabetesPedigreeFunction: {pedigree}
 Age: {age}
 
+
 MODEL PERFORMANCE
+------------------------------------------------------------
+
 Accuracy: 68.83%
 Precision: 53.95%
 Recall: 75.93%
 F1 Score: 63.08%
 ROC-AUC: 78.69%
 
+
 IMPORTANT NOTICE
+------------------------------------------------------------
 
 This output is generated by a machine-learning research prototype.
-It is not a medical diagnosis and must not replace professional
-clinical assessment, laboratory testing, or established medical
-screening protocols.
+
+It is NOT a medical diagnosis.
+
+It must not replace professional clinical assessment,
+laboratory testing, or established medical screening protocols.
+
+The model probability is a machine-learning estimate and should
+not be interpreted as a clinically calibrated probability unless
+the model has undergone appropriate probability calibration
+and external clinical validation.
 """
 
                 st.download_button(
                     label="📄 Download Assessment Report",
                     data=report,
-                    file_name="diabetes_risk_assessment.txt",
+                    file_name=(
+                        "diabetes_risk_assessment.txt"
+                    ),
                     mime="text/plain",
                     use_container_width=True
+                )
+
+            else:
+
+                st.warning(
+                    "The model generated a classification, but "
+                    "a probability estimate is not available."
+                )
+
+                st.metric(
+                    "Predicted Class",
+                    (
+                        "Positive (1)"
+                        if prediction == 1
+                        else "Negative (0)"
+                    )
                 )
 
         except Exception as error:
 
             st.error(
-                f"Prediction failed: {error}"
+                "❌ Prediction failed."
+            )
+
+            st.exception(error)
+
+            st.warning(
+                """
+                This usually indicates that the deployed model's
+                expected input format does not match the eight
+                features supplied by the application.
+
+                Verify that the saved .pkl model was trained using:
+
+                Pregnancies, Glucose, BloodPressure, SkinThickness,
+                Insulin, BMI, DiabetesPedigreeFunction, Age
+                """
             )
 
 
@@ -898,74 +1139,140 @@ elif page == "📊 Dataset Explorer":
             "diabetes_nan.csv was not found beside the application."
         )
 
+        if data_error:
+
+            st.exception(
+                Exception(data_error)
+            )
+
     else:
 
         st.write(
-            "Explore the dataset used during development of the model."
+            "Explore the dataset used during development "
+            "of the model."
         )
+
+        # ----------------------------------------------------
+        # IDENTIFY TARGET COLUMN
+        # ----------------------------------------------------
+
+        target_column = None
+
+        possible_target_columns = [
+            "outcome(target)",
+            "Outcome",
+            "Outcome(Target)",
+            "outcome",
+            "target",
+            "Target"
+        ]
+
+        for column in possible_target_columns:
+
+            if column in data.columns:
+
+                target_column = column
+                break
+
+        # ----------------------------------------------------
+        # DATASET METRICS
+        # ----------------------------------------------------
 
         c1, c2, c3, c4 = st.columns(4)
 
         with c1:
+
             st.metric(
                 "Records",
                 f"{len(data):,}"
             )
 
         with c2:
+
             st.metric(
                 "Features",
                 "8"
             )
 
+        if target_column is not None:
+
+            positive_cases = int(
+                (data[target_column] == 1).sum()
+            )
+
+            negative_cases = int(
+                (data[target_column] == 0).sum()
+            )
+
+        else:
+
+            positive_cases = 0
+            negative_cases = 0
+
         with c3:
+
             st.metric(
                 "Positive Cases",
-                f"{(data['outcome(target)'] == 1).sum():,}"
+                f"{positive_cases:,}"
             )
 
         with c4:
+
             st.metric(
                 "Negative Cases",
-                f"{(data['outcome(target)'] == 0).sum():,}"
+                f"{negative_cases:,}"
             )
 
         st.divider()
 
-        # --------------------------------------------------------
+        # ----------------------------------------------------
         # TARGET DISTRIBUTION
-        # --------------------------------------------------------
+        # ----------------------------------------------------
 
         left, right = st.columns(2)
 
         with left:
 
-            st.markdown("### Target Distribution")
-
-            target_counts = (
-                data["outcome(target)"]
-                .value_counts()
-                .sort_index()
+            st.markdown(
+                "### Target Distribution"
             )
 
-            target_display = pd.DataFrame({
-                "Class": [
-                    "No Diabetes",
-                    "Diabetes"
-                ],
-                "Patients": [
-                    target_counts.get(0, 0),
-                    target_counts.get(1, 0)
-                ]
-            })
+            if target_column is not None:
 
-            st.bar_chart(
-                target_display.set_index("Class")
-            )
+                target_counts = (
+                    data[target_column]
+                    .value_counts()
+                    .sort_index()
+                )
+
+                target_display = pd.DataFrame({
+                    "Class": [
+                        "No Diabetes",
+                        "Diabetes"
+                    ],
+                    "Patients": [
+                        target_counts.get(0, 0),
+                        target_counts.get(1, 0)
+                    ]
+                })
+
+                st.bar_chart(
+                    target_display.set_index(
+                        "Class"
+                    )
+                )
+
+            else:
+
+                st.warning(
+                    "Target column could not be identified."
+                )
 
         with right:
 
-            st.markdown("### Missing Values — Original Dataset")
+            st.markdown(
+                "### Missing Values — Original Dataset"
+            )
 
             missing = data.isnull().sum()
 
@@ -992,11 +1299,46 @@ elif page == "📊 Dataset Explorer":
 
         st.divider()
 
-        # --------------------------------------------------------
-        # DATA TABLE
-        # --------------------------------------------------------
+        # ----------------------------------------------------
+        # DATA QUALITY
+        # ----------------------------------------------------
 
-        st.markdown("### Dataset Preview")
+        st.markdown(
+            "### 🔍 Data Quality Overview"
+        )
+
+        q1, q2, q3 = st.columns(3)
+
+        with q1:
+
+            st.metric(
+                "Missing Cells",
+                f"{int(data.isnull().sum().sum()):,}"
+            )
+
+        with q2:
+
+            st.metric(
+                "Duplicate Rows",
+                f"{int(data.duplicated().sum()):,}"
+            )
+
+        with q3:
+
+            st.metric(
+                "Columns",
+                f"{len(data.columns):,}"
+            )
+
+        st.divider()
+
+        # ----------------------------------------------------
+        # DATA TABLE
+        # ----------------------------------------------------
+
+        st.markdown(
+            "### Dataset Preview"
+        )
 
         st.dataframe(
             data.head(100),
@@ -1022,7 +1364,9 @@ elif page == "🧠 Model Intelligence":
     # PIPELINE
     # --------------------------------------------------------
 
-    st.markdown("### 🔗 Machine Learning Pipeline")
+    st.markdown(
+        "### 🔗 Machine Learning Pipeline"
+    )
 
     pipeline_steps = pd.DataFrame({
         "Stage": [
@@ -1061,7 +1405,9 @@ elif page == "🧠 Model Intelligence":
     # BEST PARAMETERS
     # --------------------------------------------------------
 
-    st.markdown("### ⚙️ Selected Hyperparameters")
+    st.markdown(
+        "### ⚙️ Selected Hyperparameters"
+    )
 
     params = pd.DataFrame({
         "Parameter": [
@@ -1086,7 +1432,9 @@ elif page == "🧠 Model Intelligence":
     # FEATURE COEFFICIENTS
     # --------------------------------------------------------
 
-    st.markdown("### 📈 Learned Feature Coefficients")
+    st.markdown(
+        "### 📈 Learned Feature Coefficients"
+    )
 
     feature_values = pd.DataFrame({
         "Feature": [
@@ -1126,10 +1474,31 @@ elif page == "🧠 Model Intelligence":
         hide_index=True
     )
 
+    st.markdown(
+        "### Feature Importance"
+    )
+
+    importance_chart = (
+        feature_values[
+            ["Feature", "Absolute Importance"]
+        ]
+        .set_index("Feature")
+        .sort_values(
+            "Absolute Importance"
+        )
+    )
+
+    st.bar_chart(
+        importance_chart,
+        horizontal=True,
+        height=450
+    )
+
     st.info(
-        "Glucose has the largest positive coefficient in the trained "
-        "Logistic Regression model, followed by BMI. These values describe "
-        "the model's learned associations; they do not establish causation."
+        "Glucose has the largest positive coefficient in the "
+        "trained Logistic Regression model, followed by BMI. "
+        "These values describe the model's learned associations; "
+        "they do not establish causation."
     )
 
 
@@ -1145,7 +1514,9 @@ elif page == "⚖️ Model Evaluation":
     # METRICS
     # --------------------------------------------------------
 
-    st.markdown("### Optimized Model Performance")
+    st.markdown(
+        "### Optimized Model Performance"
+    )
 
     c1, c2, c3, c4, c5 = st.columns(5)
 
@@ -1187,61 +1558,40 @@ elif page == "⚖️ Model Evaluation":
     # CONFUSION MATRIX
     # --------------------------------------------------------
 
-    st.markdown("### Confusion Matrix")
-
-    cm = np.array([
-        [65, 35],
-        [13, 41]
-    ])
-
-    fig, ax = plt.subplots(figsize=(7, 5))
-
-    image = ax.imshow(cm)
-
-    ax.set_xticks([0, 1])
-    ax.set_yticks([0, 1])
-
-    ax.set_xticklabels([
-        "Predicted Negative",
-        "Predicted Positive"
-    ])
-
-    ax.set_yticklabels([
-        "Actual Negative",
-        "Actual Positive"
-    ])
-
-    for i in range(2):
-
-        for j in range(2):
-
-            ax.text(
-                j,
-                i,
-                str(cm[i, j]),
-                ha="center",
-                va="center",
-                fontsize=18,
-                fontweight="bold"
-            )
-
-    ax.set_xlabel("Model Prediction")
-    ax.set_ylabel("Actual Outcome")
-
-    ax.set_title(
-        "Optimized Model Confusion Matrix"
+    st.markdown(
+        "### Confusion Matrix"
     )
 
-    plt.colorbar(image, ax=ax)
+    cm = np.array([
+        [
+            CONFUSION_MATRIX["TN"],
+            CONFUSION_MATRIX["FP"]
+        ],
+        [
+            CONFUSION_MATRIX["FN"],
+            CONFUSION_MATRIX["TP"]
+        ]
+    ])
 
-    plt.tight_layout()
+    cm_df = pd.DataFrame(
+        cm,
+        index=[
+            "Actual Negative",
+            "Actual Positive"
+        ],
+        columns=[
+            "Predicted Negative",
+            "Predicted Positive"
+        ]
+    )
 
-    st.pyplot(fig)
-
-    plt.close(fig)
+    st.dataframe(
+        cm_df,
+        use_container_width=True
+    )
 
     # --------------------------------------------------------
-    # CONFUSION MATRIX TABLE
+    # CONFUSION MATRIX DETAILS
     # --------------------------------------------------------
 
     confusion_table = pd.DataFrame({
@@ -1252,10 +1602,10 @@ elif page == "⚖️ Model Evaluation":
             "True Positive"
         ],
         "Count": [
-            65,
-            35,
-            13,
-            41
+            CONFUSION_MATRIX["TN"],
+            CONFUSION_MATRIX["FP"],
+            CONFUSION_MATRIX["FN"],
+            CONFUSION_MATRIX["TP"]
         ],
         "Interpretation": [
             "Correctly identified non-diabetic cases",
@@ -1272,10 +1622,75 @@ elif page == "⚖️ Model Evaluation":
     )
 
     # --------------------------------------------------------
+    # CALCULATED METRICS
+    # --------------------------------------------------------
+
+    tn = CONFUSION_MATRIX["TN"]
+    fp = CONFUSION_MATRIX["FP"]
+    fn = CONFUSION_MATRIX["FN"]
+    tp = CONFUSION_MATRIX["TP"]
+
+    total = tn + fp + fn + tp
+
+    calculated_accuracy = (
+        (tp + tn) / total
+        if total > 0
+        else 0
+    )
+
+    calculated_precision = (
+        tp / (tp + fp)
+        if (tp + fp) > 0
+        else 0
+    )
+
+    calculated_recall = (
+        tp / (tp + fn)
+        if (tp + fn) > 0
+        else 0
+    )
+
+    calculated_f1 = (
+        2 * calculated_precision * calculated_recall
+        / (calculated_precision + calculated_recall)
+        if (calculated_precision + calculated_recall) > 0
+        else 0
+    )
+
+    st.markdown(
+        "### 📐 Metrics Reconstructed From Confusion Matrix"
+    )
+
+    calculated_metrics = pd.DataFrame({
+        "Metric": [
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "F1 Score"
+        ],
+        "Calculated": [
+            calculated_accuracy,
+            calculated_precision,
+            calculated_recall,
+            calculated_f1
+        ]
+    })
+
+    st.dataframe(
+        calculated_metrics.style.format({
+            "Calculated": "{:.2%}"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # --------------------------------------------------------
     # MEDICAL CONTEXT
     # --------------------------------------------------------
 
-    st.markdown("### 🏥 Medical Context")
+    st.markdown(
+        "### 🏥 Medical Context"
+    )
 
     st.warning(
         """
@@ -1283,11 +1698,10 @@ elif page == "⚖️ Model Evaluation":
         consequential than false positives because a missed high-risk
         patient may not receive timely follow-up.
 
-        The optimized model reduced false negatives from 27 in the
-        baseline confusion matrix to 13 in the optimized test result,
-        while increasing false positives.
+        The optimized model has 13 false negatives in the reported
+        test result, alongside 35 false positives.
 
-        This represents a deliberate trade-off toward higher recall,
+        This reflects a deliberate trade-off toward higher recall,
         not proof of clinical safety.
         """
     )
@@ -1299,7 +1713,9 @@ elif page == "⚖️ Model Evaluation":
 
 elif page == "🛡️ Responsible AI":
 
-    st.subheader("🛡️ Responsible AI & Clinical Safety")
+    st.subheader(
+        "🛡️ Responsible AI & Clinical Safety"
+    )
 
     st.markdown(
         """
@@ -1348,7 +1764,40 @@ elif page == "🛡️ Responsible AI":
 
     st.divider()
 
-    st.markdown("### Researcher's Note")
+    st.markdown(
+        "### 🔎 Model Limitations"
+    )
+
+    limitations = pd.DataFrame({
+        "Area": [
+            "Clinical Validation",
+            "External Validation",
+            "Calibration",
+            "Population Generalization",
+            "Decision Threshold",
+            "Data Quality",
+            "Clinical Deployment"
+        ],
+        "Current Status": [
+            "Not performed",
+            "Not performed",
+            "Not established",
+            "Limited to development dataset",
+            "Research threshold",
+            "Dataset dependent",
+            "Not intended"
+        ]
+    })
+
+    st.dataframe(
+        limitations,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.markdown(
+        "### Researcher's Note"
+    )
 
     st.info(
         """
@@ -1379,4 +1828,4 @@ st.markdown(
     </div>
     """,
     unsafe_allow_html=True
-      )
+    )
