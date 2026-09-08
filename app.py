@@ -622,7 +622,7 @@ if page == "🏠 Executive Dashboard":
             "Optimized": "{:.2%}",
             "Change": "{:+.2%}"
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -798,7 +798,7 @@ elif page == "🔬 Patient Risk Assessment":
 
         submitted = st.form_submit_button(
             "🔎 Run Risk Assessment",
-            use_container_width=True,
+            width="stretch",
             type="primary"
         )
 
@@ -1010,7 +1010,7 @@ elif page == "🔬 Patient Risk Assessment":
 
                 st.dataframe(
                     summary,
-                    use_container_width=True
+                    width="stretch"
                 )
 
                 # ------------------------------------------------
@@ -1084,7 +1084,7 @@ and external clinical validation.
                         "diabetes_risk_assessment.txt"
                     ),
                     mime="text/plain",
-                    use_container_width=True
+                    width="stretch"
                 )
 
             else:
@@ -1342,7 +1342,7 @@ elif page == "📊 Dataset Explorer":
 
         st.dataframe(
             data.head(100),
-            use_container_width=True,
+            width="stretch",
             hide_index=True
         )
 
@@ -1397,7 +1397,7 @@ elif page == "🧠 Model Intelligence":
 
     st.dataframe(
         pipeline_steps,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1424,7 +1424,7 @@ elif page == "🧠 Model Intelligence":
 
     st.dataframe(
         params,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1470,7 +1470,7 @@ elif page == "🧠 Model Intelligence":
 
     st.dataframe(
         feature_values,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1587,7 +1587,7 @@ elif page == "⚖️ Model Evaluation":
 
     st.dataframe(
         cm_df,
-        use_container_width=True
+        width="stretch"
     )
 
     # --------------------------------------------------------
@@ -1617,7 +1617,7 @@ elif page == "⚖️ Model Evaluation":
 
     st.dataframe(
         confusion_table,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1680,7 +1680,7 @@ elif page == "⚖️ Model Evaluation":
         calculated_metrics.style.format({
             "Calculated": "{:.2%}"
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1791,7 +1791,7 @@ elif page == "🛡️ Responsible AI":
 
     st.dataframe(
         limitations,
-        use_container_width=True,
+        width="stretch",
         hide_index=True
     )
 
@@ -1828,4 +1828,4 @@ st.markdown(
     </div>
     """,
     unsafe_allow_html=True
-)
+        )
