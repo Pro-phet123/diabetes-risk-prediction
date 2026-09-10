@@ -1,15 +1,25 @@
 # ============================================================
-# 🩺 DIABETES RISK INTELLIGENCE PLATFORM
+# 🩺 DIABETES RISK INTELLIGENCE
+# Premium Responsive Streamlit ML Screening Dashboard
+#
+# Author:
+# Olalemi Olaoluwakintan Emmanuel
+#
+# Project:
 # Diabetes Risk Prediction Using Machine Learning
-# Author: Olalemi Olaoluwakintan Emmanuel
+#
+# IMPORTANT:
+# This application is an educational/research prototype.
+# It is NOT a medical diagnostic system.
 # ============================================================
 
-import os
-import html
-import joblib
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
+import joblib
+
+from pathlib import Path
+from datetime import datetime
 
 
 # ============================================================
@@ -17,7 +27,7 @@ import streamlit as st
 # ============================================================
 
 st.set_page_config(
-    page_title="Diabetes AI | Risk Intelligence",
+    page_title="Diabetes Risk Intelligence",
     page_icon="🩺",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -25,13 +35,20 @@ st.set_page_config(
 
 
 # ============================================================
-# CONSTANTS
+# PROJECT PATHS
 # ============================================================
 
-MODEL_PATH = "diabetes_risk_prediction_model.pkl"
-DATASET_PATH = "diabetes_nan.csv"
+BASE_DIR = Path(__file__).resolve().parent
 
-FEATURES = [
+MODEL_PATH = BASE_DIR / "diabetes_risk_prediction_model.pkl"
+DATA_PATH = BASE_DIR / "diabetes_nan.csv"
+
+
+# ============================================================
+# EXPECTED MODEL FEATURES
+# ============================================================
+
+EXPECTED_FEATURES = [
     "Pregnancies",
     "Glucose",
     "BloodPressure",
@@ -42,447 +59,455 @@ FEATURES = [
     "Age"
 ]
 
-DISPLAY_NAMES = {
-    "Pregnancies": "Pregnancies",
-    "Glucose": "Glucose",
-    "BloodPressure": "Blood Pressure",
-    "SkinThickness": "Skin Thickness",
-    "Insulin": "Insulin",
-    "BMI": "BMI",
-    "DiabetesPedigreeFunction": "Diabetes Pedigree Function",
-    "Age": "Age"
+
+# ============================================================
+# MODEL PERFORMANCE
+# ============================================================
+
+BASELINE_METRICS = {
+    "Accuracy": 0.7013,
+    "Precision": 0.5870,
+    "Recall": 0.5000,
+    "F1 Score": 0.5400
+}
+
+
+OPTIMIZED_METRICS = {
+    "Accuracy": 0.6883,
+    "Precision": 0.5395,
+    "Recall": 0.7593,
+    "F1 Score": 0.6308,
+    "ROC-AUC": 0.7869
 }
 
 
 # ============================================================
-# CUSTOM CSS
+# CONFUSION MATRIX
 # ============================================================
 
-st.markdown(
-    """
+CONFUSION_MATRIX = {
+    "TN": 65,
+    "FP": 35,
+    "FN": 13,
+    "TP": 41
+}
+
+
+# ============================================================
+# BEST HYPERPARAMETERS
+# ============================================================
+
+BEST_PARAMETERS = {
+    "C": 0.001,
+    "Solver": "liblinear",
+    "Class Weight": "None",
+    "Cross-Validation": "5-Fold",
+    "Optimization Metric": "F1 Score"
+}
+
+
+# ============================================================
+# FEATURE COEFFICIENTS
+# ============================================================
+
+FEATURE_COEFFICIENTS = {
+    "Glucose": 0.156972,
+    "BMI": 0.102375,
+    "SkinThickness": 0.062338,
+    "Insulin": 0.058959,
+    "Age": 0.058537,
+    "Pregnancies": 0.053139,
+    "BloodPressure": 0.045498,
+    "DiabetesPedigreeFunction": 0.043508
+}
+
+
+# ============================================================
+# SESSION STATE
+# ============================================================
+
+if "theme" not in st.session_state:
+    st.session_state.theme = "Dark"
+
+if "assessment_result" not in st.session_state:
+    st.session_state.assessment_result = None
+
+
+# ============================================================
+# THEME DEFINITIONS
+# ============================================================
+
+THEMES = {
+
+    "Dark": {
+        "background": "#050505",
+        "surface": "#0b0b0d",
+        "surface2": "#111114",
+        "card": "#111114",
+        "border": "rgba(255,255,255,0.09)",
+        "text": "#f8fafc",
+        "muted": "#94a3b8",
+        "primary": "#60a5fa",
+        "secondary": "#a78bfa",
+        "success": "#34d399",
+        "warning": "#fbbf24",
+        "danger": "#fb7185"
+    },
+
+    "Midnight Blue": {
+        "background": "#020617",
+        "surface": "#0f172a",
+        "surface2": "#172033",
+        "card": "#0f172a",
+        "border": "rgba(148,163,184,0.12)",
+        "text": "#f8fafc",
+        "muted": "#94a3b8",
+        "primary": "#38bdf8",
+        "secondary": "#818cf8",
+        "success": "#34d399",
+        "warning": "#fbbf24",
+        "danger": "#fb7185"
+    },
+
+    "Emerald": {
+        "background": "#020807",
+        "surface": "#071311",
+        "surface2": "#0c1d19",
+        "card": "#071311",
+        "border": "rgba(52,211,153,0.12)",
+        "text": "#ecfdf5",
+        "muted": "#94a3b8",
+        "primary": "#34d399",
+        "secondary": "#2dd4bf",
+        "success": "#4ade80",
+        "warning": "#fbbf24",
+        "danger": "#fb7185"
+    },
+
+    "Light": {
+        "background": "#f5f7fb",
+        "surface": "#ffffff",
+        "surface2": "#f8fafc",
+        "card": "#ffffff",
+        "border": "rgba(15,23,42,0.08)",
+        "text": "#0f172a",
+        "muted": "#64748b",
+        "primary": "#2563eb",
+        "secondary": "#7c3aed",
+        "success": "#16a34a",
+        "warning": "#d97706",
+        "danger": "#dc2626"
+    }
+}
+
+
+theme = THEMES[st.session_state.theme]
+
+
+# ============================================================
+# GLOBAL CSS
+# ============================================================
+
+st.html(
+    f"""
     <style>
 
-    /* ========================================================
-       GLOBAL
-       ======================================================== */
+    * {{
+        box-sizing: border-box;
+    }}
 
-    #MainMenu {
-        visibility: hidden;
-    }
+    html, body {{
+        font-family:
+            Inter,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+    }}
 
-    footer {
-        visibility: hidden;
-    }
-
-    header[data-testid="stHeader"] {
-        background: rgba(0,0,0,0);
-    }
-
-    .stApp {
+    .stApp {{
         background:
             radial-gradient(
-                circle at 85% 5%,
-                rgba(34, 211, 238, 0.08),
-                transparent 25%
+                circle at 10% 0%,
+                rgba(37,99,235,0.09),
+                transparent 28%
             ),
             radial-gradient(
-                circle at 10% 20%,
-                rgba(99, 102, 241, 0.06),
+                circle at 90% 10%,
+                rgba(124,58,237,0.08),
                 transparent 25%
             ),
-            #05070a;
-        color: #f8fafc;
-    }
+            {theme["background"]};
+        color: {theme["text"]};
+    }}
 
-    .block-container {
+    .block-container {{
         max-width: 1450px;
         padding-top: 2rem;
-        padding-bottom: 4rem;
-    }
+        padding-bottom: 5rem;
+        padding-left: 3rem;
+        padding-right: 3rem;
+    }}
 
-    /* ========================================================
-       SIDEBAR
-       ======================================================== */
+    section[data-testid="stSidebar"] {{
+        background: {theme["surface"]};
+        border-right: 1px solid {theme["border"]};
+    }}
 
-    section[data-testid="stSidebar"] {
+    section[data-testid="stSidebar"] * {{
+        color: {theme["text"]};
+    }}
+
+    h1, h2, h3, h4, p {{
+        color: {theme["text"]};
+    }}
+
+    .hero {{
+        position: relative;
+        overflow: hidden;
+        padding: 3rem;
+        border-radius: 30px;
+        margin-bottom: 1.5rem;
+
         background:
+            radial-gradient(
+                circle at 85% 15%,
+                rgba(96,165,250,0.22),
+                transparent 30%
+            ),
             linear-gradient(
-                180deg,
-                #070b10 0%,
-                #05070a 100%
+                135deg,
+                {theme["surface"]},
+                {theme["surface2"]}
             );
-        border-right: 1px solid rgba(255,255,255,0.07);
-    }
 
-    section[data-testid="stSidebar"] > div {
-        padding-top: 1.5rem;
-    }
+        border: 1px solid {theme["border"]};
 
-    /* ========================================================
-       HERO
-       ======================================================== */
+        box-shadow:
+            0 25px 80px rgba(0,0,0,0.25);
+    }}
 
-    .hero-container {
-        padding: 2.5rem 0 1.5rem 0;
-    }
-
-    .hero-badge {
+    .hero-badge {{
         display: inline-block;
         padding: 7px 13px;
         border-radius: 999px;
-        border: 1px solid rgba(34,211,238,0.25);
-        background: rgba(34,211,238,0.07);
-        color: #67e8f9;
-        font-size: 0.74rem;
+        background: rgba(96,165,250,0.10);
+        border: 1px solid rgba(96,165,250,0.22);
+        color: {theme["primary"]};
+        font-size: 0.75rem;
         font-weight: 700;
-        letter-spacing: 0.12em;
-        margin-bottom: 1.1rem;
-    }
+        letter-spacing: 0.08em;
+        margin-bottom: 1rem;
+    }}
 
-    .hero-title {
-        font-size: clamp(2.8rem, 7vw, 6.5rem);
-        line-height: 0.95;
+    .hero-title {{
+        margin: 0;
+        font-size: clamp(2.4rem, 6vw, 5rem);
+        line-height: 0.98;
         letter-spacing: -0.055em;
         font-weight: 850;
-        margin: 0;
-        color: #f8fafc;
-    }
+        color: {theme["text"]};
+    }}
 
-    .hero-title span {
-        color: #67e8f9;
-    }
-
-    .hero-subtitle {
-        max-width: 760px;
-        color: #94a3b8;
-        font-size: 1.08rem;
+    .hero-subtitle {{
+        max-width: 780px;
+        margin-top: 1.3rem;
+        color: {theme["muted"]};
+        font-size: 1.05rem;
         line-height: 1.7;
-        margin-top: 1.5rem;
-    }
+    }}
 
-    .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
+    .status {{
+        display: inline-block;
         padding: 7px 12px;
         border-radius: 999px;
         font-size: 0.78rem;
-        font-weight: 650;
-        margin-top: 1rem;
-    }
+        font-weight: 700;
+    }}
 
-    .status-green {
-        background: rgba(34,197,94,0.09);
-        color: #86efac;
-        border: 1px solid rgba(34,197,94,0.18);
-    }
+    .status-green {{
+        color: {theme["success"]};
+        background: rgba(52,211,153,0.09);
+        border: 1px solid rgba(52,211,153,0.18);
+    }}
 
-    .status-blue {
-        background: rgba(59,130,246,0.09);
-        color: #93c5fd;
-        border: 1px solid rgba(59,130,246,0.18);
-    }
-
-    /* ========================================================
-       CARDS
-       ======================================================== */
-
-    .glass-card {
-        background:
-            linear-gradient(
-                145deg,
-                rgba(255,255,255,0.045),
-                rgba(255,255,255,0.018)
-            );
-        border: 1px solid rgba(255,255,255,0.08);
-        border-radius: 20px;
-        padding: 1.35rem;
-        box-shadow:
-            0 20px 50px rgba(0,0,0,0.18);
-    }
-
-    .section-card {
-        margin-top: 1.25rem;
-        margin-bottom: 1.25rem;
-    }
-
-    .card-title {
-        color: #f8fafc;
-        font-size: 1.05rem;
-        font-weight: 750;
-        margin-bottom: 0.3rem;
-    }
-
-    .card-subtitle {
-        color: #64748b;
-        font-size: 0.84rem;
-        line-height: 1.5;
-    }
-
-    /* ========================================================
-       METRICS
-       ======================================================== */
-
-    .metric-card {
-        background:
-            linear-gradient(
-                145deg,
-                rgba(255,255,255,0.05),
-                rgba(255,255,255,0.018)
-            );
-        border: 1px solid rgba(255,255,255,0.075);
+    .safety {{
+        padding: 1.2rem 1.4rem;
         border-radius: 18px;
+        margin-bottom: 1.6rem;
+        background: rgba(251,191,36,0.07);
+        border: 1px solid rgba(251,191,36,0.22);
+        color: {theme["text"]};
+        line-height: 1.65;
+    }}
+
+    .safety-title {{
+        font-weight: 800;
+        color: {theme["warning"]};
+        margin-bottom: 0.35rem;
+    }}
+
+    .section-title {{
+        font-size: 1.8rem;
+        font-weight: 800;
+        letter-spacing: -0.035em;
+        margin: 1.5rem 0 0.4rem 0;
+    }}
+
+    .section-description {{
+        color: {theme["muted"]};
+        margin-bottom: 1.2rem;
+        line-height: 1.6;
+    }}
+
+    .metric-card {{
         padding: 1.25rem;
-        min-height: 145px;
-    }
+        min-height: 135px;
+        border-radius: 20px;
+        background: {theme["card"]};
+        border: 1px solid {theme["border"]};
+        box-shadow: 0 10px 35px rgba(0,0,0,0.12);
+    }}
 
-    .metric-label {
-        color: #64748b;
+    .metric-label {{
+        color: {theme["muted"]};
         font-size: 0.72rem;
-        letter-spacing: 0.1em;
-        font-weight: 750;
+        font-weight: 700;
+        letter-spacing: 0.07em;
         text-transform: uppercase;
-    }
+    }}
 
-    .metric-value {
-        color: #f8fafc;
-        font-size: 2.05rem;
-        font-weight: 800;
-        letter-spacing: -0.04em;
-        margin-top: 0.4rem;
-    }
-
-    .metric-delta {
-        color: #67e8f9;
-        font-size: 0.76rem;
-        margin-top: 0.25rem;
-    }
-
-    /* ========================================================
-       RISK RESULT
-       ======================================================== */
-
-    .risk-safe {
-        border: 1px solid rgba(34,197,94,0.3);
-        background: rgba(34,197,94,0.075);
-        border-radius: 22px;
-        padding: 1.8rem;
-    }
-
-    .risk-warning {
-        border: 1px solid rgba(245,158,11,0.32);
-        background: rgba(245,158,11,0.075);
-        border-radius: 22px;
-        padding: 1.8rem;
-    }
-
-    .risk-danger {
-        border: 1px solid rgba(239,68,68,0.35);
-        background: rgba(239,68,68,0.075);
-        border-radius: 22px;
-        padding: 1.8rem;
-    }
-
-    .risk-label {
-        font-size: 0.75rem;
-        letter-spacing: 0.1em;
-        font-weight: 800;
-        text-transform: uppercase;
-        color: #94a3b8;
-    }
-
-    .risk-title {
+    .metric-value {{
+        color: {theme["text"]};
         font-size: 2rem;
         font-weight: 850;
-        margin: 0.35rem 0;
+        margin-top: 0.3rem;
         letter-spacing: -0.04em;
-    }
+    }}
 
-    .risk-text {
-        color: #cbd5e1;
-        line-height: 1.65;
-        font-size: 0.92rem;
-    }
+    .metric-delta {{
+        color: {theme["success"]};
+        font-size: 0.75rem;
+        margin-top: 0.3rem;
+    }}
 
-    /* ========================================================
-       PROGRESS
-       ======================================================== */
+    .card {{
+        padding: 1.5rem;
+        border-radius: 22px;
+        background: {theme["card"]};
+        border: 1px solid {theme["border"]};
+        margin-bottom: 1rem;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.10);
+    }}
 
-    .progress-track {
-        width: 100%;
-        height: 9px;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.07);
-        overflow: hidden;
-        margin-top: 0.75rem;
-    }
+    .card h3 {{
+        margin-top: 0;
+        color: {theme["text"]};
+    }}
 
-    .progress-fill {
-        height: 100%;
-        border-radius: 999px;
-        background: linear-gradient(
-            90deg,
-            #22d3ee,
-            #6366f1
-        );
-    }
-
-    /* ========================================================
-       INFO
-       ======================================================== */
-
-    .info-box {
-        border-left: 3px solid #22d3ee;
-        background: rgba(34,211,238,0.045);
-        padding: 1rem 1.15rem;
-        border-radius: 0 12px 12px 0;
-        color: #cbd5e1;
-        line-height: 1.65;
-        font-size: 0.9rem;
-    }
-
-    .warning-box {
-        border-left: 3px solid #f59e0b;
-        background: rgba(245,158,11,0.045);
-        padding: 1rem 1.15rem;
-        border-radius: 0 12px 12px 0;
-        color: #cbd5e1;
-        line-height: 1.65;
-        font-size: 0.9rem;
-    }
-
-    .danger-box {
-        border-left: 3px solid #ef4444;
-        background: rgba(239,68,68,0.045);
-        padding: 1rem 1.15rem;
-        border-radius: 0 12px 12px 0;
-        color: #cbd5e1;
-        line-height: 1.65;
-        font-size: 0.9rem;
-    }
-
-    /* ========================================================
-       TABLE
-       ======================================================== */
-
-    .simple-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.86rem;
-    }
-
-    .simple-table th {
-        text-align: left;
-        color: #64748b;
-        font-size: 0.7rem;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        padding: 0.75rem;
-        border-bottom: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .simple-table td {
-        padding: 0.75rem;
-        color: #cbd5e1;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-    }
-
-    /* ========================================================
-       STREAMLIT INPUTS
-       ======================================================== */
-
-    div[data-baseweb="input"] {
-        background: rgba(255,255,255,0.035);
-        border-radius: 10px;
-    }
-
-    div[data-baseweb="input"] input {
-        color: #f8fafc;
-    }
-
-    label {
-        color: #cbd5e1 !important;
-    }
-
-    .stButton > button {
-        width: 100%;
-        min-height: 48px;
-        border-radius: 12px;
-        border: 1px solid rgba(34,211,238,0.22);
-        background:
-            linear-gradient(
-                135deg,
-                rgba(34,211,238,0.14),
-                rgba(99,102,241,0.13)
-            );
-        color: #f8fafc;
-        font-weight: 750;
-        transition: all 0.2s ease;
-    }
-
-    .stButton > button:hover {
-        border-color: rgba(34,211,238,0.55);
-        transform: translateY(-1px);
-    }
-
-    .stDownloadButton > button {
-        width: 100%;
-        min-height: 45px;
-        border-radius: 12px;
-    }
-
-    /* ========================================================
-       FOOTER
-       ======================================================== */
-
-    .footer {
-        margin-top: 4rem;
-        padding-top: 2rem;
-        border-top: 1px solid rgba(255,255,255,0.07);
-        color: #64748b;
-        text-align: center;
+    .card p {{
+        color: {theme["muted"]};
         line-height: 1.7;
-    }
+    }}
 
-    .footer strong {
-        color: #cbd5e1;
-    }
+    .feature-row {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid {theme["border"]};
+    }}
 
-    /* ========================================================
-       MOBILE
-       ======================================================== */
+    .feature-row:last-child {{
+        border-bottom: none;
+    }}
 
-    @media (max-width: 768px) {
+    .feature-name {{
+        color: {theme["text"]};
+        font-weight: 600;
+    }}
 
-        .block-container {
+    .feature-value {{
+        color: {theme["primary"]};
+        font-weight: 800;
+        font-family: monospace;
+    }}
+
+    .result-positive {{
+        padding: 1.5rem;
+        border-radius: 22px;
+        background: rgba(251,113,133,0.08);
+        border: 1px solid rgba(251,113,133,0.28);
+        margin-top: 1rem;
+    }}
+
+    .result-intermediate {{
+        padding: 1.5rem;
+        border-radius: 22px;
+        background: rgba(251,191,36,0.08);
+        border: 1px solid rgba(251,191,36,0.28);
+        margin-top: 1rem;
+    }}
+
+    .result-negative {{
+        padding: 1.5rem;
+        border-radius: 22px;
+        background: rgba(52,211,153,0.08);
+        border: 1px solid rgba(52,211,153,0.28);
+        margin-top: 1rem;
+    }}
+
+    .result-title {{
+        font-size: 1.25rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+    }}
+
+    .result-text {{
+        color: {theme["muted"]};
+        line-height: 1.65;
+    }}
+
+    .footer {{
+        text-align: center;
+        margin-top: 4rem;
+        padding: 2rem;
+        color: {theme["muted"]};
+        border-top: 1px solid {theme["border"]};
+    }}
+
+    @media (max-width: 768px) {{
+
+        .block-container {{
             padding-left: 1rem;
             padding-right: 1rem;
-        }
-
-        .hero-container {
             padding-top: 1rem;
-        }
+        }}
 
-        .hero-title {
-            font-size: 3.2rem;
-        }
+        .hero {{
+            padding: 1.7rem;
+            border-radius: 22px;
+        }}
 
-        .hero-subtitle {
+        .hero-title {{
+            font-size: 2.7rem;
+        }}
+
+        .hero-subtitle {{
             font-size: 0.95rem;
-        }
+        }}
 
-        .metric-card {
-            min-height: 125px;
-        }
+        .metric-card {{
+            min-height: 110px;
+        }}
 
-        .metric-value {
-            font-size: 1.65rem;
-        }
-    }
+        .metric-value {{
+            font-size: 1.55rem;
+        }}
+    }}
 
     </style>
-    """,
-    unsafe_allow_html=True
+    """
 )
 
 
@@ -492,29 +517,62 @@ st.markdown(
 
 @st.cache_resource
 def load_model():
-    if not os.path.exists(MODEL_PATH):
-        return None, f"Model file not found: {MODEL_PATH}"
+
+    if not MODEL_PATH.exists():
+        return None, f"Model file not found: {MODEL_PATH.name}"
 
     try:
-        model = joblib.load(MODEL_PATH)
-        return model, None
-    except Exception as e:
-        return None, str(e)
+        loaded_model = joblib.load(MODEL_PATH)
+        return loaded_model, None
 
+    except Exception as error:
+        return None, str(error)
+
+
+# ============================================================
+# DATASET LOADING
+# ============================================================
 
 @st.cache_data
 def load_dataset():
-    if not os.path.exists(DATASET_PATH):
-        return None
+
+    if not DATA_PATH.exists():
+        return None, f"Dataset file not found: {DATA_PATH.name}"
 
     try:
-        return pd.read_csv(DATASET_PATH)
-    except Exception:
-        return None
+        loaded_data = pd.read_csv(DATA_PATH)
+        return loaded_data, None
+
+    except Exception as error:
+        return None, str(error)
 
 
 model, model_error = load_model()
-dataset = load_dataset()
+data, data_error = load_dataset()
+
+
+# ============================================================
+# TARGET DETECTION
+# ============================================================
+
+target_column = None
+
+if data is not None:
+
+    possible_targets = [
+        "outcome(target)",
+        "Outcome",
+        "Outcome(Target)",
+        "outcome",
+        "target",
+        "Target"
+    ]
+
+    for column in possible_targets:
+
+        if column in data.columns:
+            target_column = column
+            break
 
 
 # ============================================================
@@ -523,27 +581,10 @@ dataset = load_dataset()
 
 with st.sidebar:
 
-    st.markdown(
-        """
-        <div style="
-            font-size:1.35rem;
-            font-weight:800;
-            color:#f8fafc;
-            margin-bottom:0.2rem;
-        ">
-            🩺 Diabetes AI
-        </div>
+    st.markdown("## 🩺 Diabetes AI")
+    st.caption("Risk Intelligence Platform")
 
-        <div style="
-            color:#64748b;
-            font-size:0.78rem;
-            margin-bottom:1.5rem;
-        ">
-            Risk Intelligence Platform
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    st.divider()
 
     page = st.radio(
         "Navigation",
@@ -558,60 +599,88 @@ with st.sidebar:
         label_visibility="collapsed"
     )
 
-    st.markdown("---")
+    st.divider()
 
-    st.markdown(
-        """
-        <div style="
-            color:#64748b;
-            font-size:0.72rem;
-            text-transform:uppercase;
-            letter-spacing:0.1em;
-            font-weight:700;
-            margin-bottom:0.6rem;
-        ">
-            System Status
-        </div>
-        """,
-        unsafe_allow_html=True
+    st.markdown("### ⚙️ Appearance")
+
+    selected_theme = st.selectbox(
+        "Theme",
+        list(THEMES.keys()),
+        index=list(THEMES.keys()).index(
+            st.session_state.theme
+        ),
+        label_visibility="collapsed"
     )
 
-    if model is not None:
-        st.success("🟢 Model Online")
-    else:
-        st.error("🔴 Model Offline")
+    if selected_theme != st.session_state.theme:
 
-    if dataset is not None:
-        st.success("🟢 Dataset Available")
-    else:
-        st.warning("🟡 Dataset Unavailable")
+        st.session_state.theme = selected_theme
+        st.rerun()
 
-    st.markdown("---")
+    st.divider()
+
+    model_status = (
+        "🟢 Online"
+        if model is not None
+        else "🔴 Offline"
+    )
+
+    dataset_status = (
+        "🟢 Available"
+        if data is not None
+        else "🔴 Missing"
+    )
 
     st.markdown(
+        f"""
+        **Model:** {model_status}
+
+        **Dataset:** {dataset_status}
         """
-        <div style="
-            color:#64748b;
-            font-size:0.75rem;
-            line-height:1.6;
-        ">
-        Built by<br>
-        <strong style="color:#cbd5e1;">
-        Olalemi Olaoluwakintan Emmanuel
-        </strong>
-        </div>
-        """,
-        unsafe_allow_html=True
     )
+
+    st.divider()
+
+    st.caption("Built by")
+    st.markdown("**Olalemi Olaoluwakintan Emmanuel**")
+
+
+# ============================================================
+# TOP SYSTEM BAR
+# ============================================================
+
+st.html(
+    f"""
+    <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom:1rem;
+    ">
+
+        <span class="status status-green">
+            ● SYSTEM ONLINE
+        </span>
+
+        <span style="
+            color:{theme["muted"]};
+            font-size:0.8rem;
+        ">
+            Diabetes ML Screening Prototype
+        </span>
+
+    </div>
+    """
+)
 
 
 # ============================================================
 # HERO
 # ============================================================
 
-st.markdown(
-    """
-    <div class="hero-container">
+st.html(
+    f"""
+    <div class="hero">
 
         <div class="hero-badge">
             🩺 AI-POWERED HEALTH ANALYTICS
@@ -619,1014 +688,139 @@ st.markdown(
 
         <h1 class="hero-title">
             Diabetes Risk<br>
-            <span>Intelligence</span>
+            Intelligence
         </h1>
 
         <p class="hero-subtitle">
-            An interactive machine-learning screening platform
+            An interactive machine-learning screening prototype
             transforming patient-level health features into
             model-based diabetes risk estimates.
         </p>
 
-        <span class="status-pill status-green">
-            ● Research Model Online
+        <br>
+
+        <span class="status status-green">
+            ● Research Prototype
         </span>
 
     </div>
-    """,
-    unsafe_allow_html=True
-)
-
-
-# ============================================================
-# CLINICAL SAFETY NOTICE
-# ============================================================
-
-st.markdown(
     """
-    <div class="warning-box">
-        <strong>⚠️ Clinical Safety Notice</strong><br><br>
-
-        This application provides a machine-learning risk estimate based
-        on the information entered by the user. It is designed to support
-        screening, education and research — not to independently diagnose
-        diabetes.
-
-        Results should be interpreted alongside professional medical
-        assessment, appropriate laboratory testing and established
-        clinical screening procedures.
-    </div>
-    """,
-    unsafe_allow_html=True
 )
 
 
 # ============================================================
-# OVERVIEW PAGE
+# SAFETY NOTICE
+# ============================================================
+
+st.html(
+    f"""
+    <div class="safety">
+
+        <div class="safety-title">
+            ⚠️ Clinical Safety Notice
+        </div>
+
+        This application is an educational and research prototype.
+        It provides model-based screening estimates and does not
+        provide a medical diagnosis. Results must not replace
+        professional medical assessment, laboratory testing,
+        or established clinical screening protocols.
+
+    </div>
+    """
+)
+
+
+# ============================================================
+# PAGE 1 — OVERVIEW
 # ============================================================
 
 if page == "🏠 Overview":
 
-    st.markdown("## Executive Overview")
-
-    st.caption(
-        "A high-level view of the dataset, model performance, "
-        "optimization strategy and analytical insights."
-    )
-
-    total_records = 768
-    diabetic_records = 268
-    non_diabetic_records = 500
-
-    metrics = [
-        ("PATIENT RECORDS", f"{total_records}", "Development dataset"),
-        ("DIABETIC", f"{diabetic_records}", "34.9% of records"),
-        ("OPTIMIZED RECALL", "75.93%", "+25.93 percentage points"),
-        ("F1 SCORE", "63.08%", "Optimized model"),
-        ("ROC-AUC", "78.69%", "Discrimination")
-    ]
-
-    cols = st.columns(5)
-
-    for col, (label, value, delta) in zip(cols, metrics):
-        with col:
-            st.markdown(
-                f"""
-                <div class="metric-card">
-                    <div class="metric-label">{label}</div>
-                    <div class="metric-value">{value}</div>
-                    <div class="metric-delta">{delta}</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    st.markdown(
+    st.html(
         """
-        <div class="glass-card section-card">
-
-            <div class="card-title">
-                🎯 Why the optimized model matters
-            </div>
-
-            <div class="card-subtitle">
-                The project was optimized around the problem's actual
-                evaluation needs rather than accuracy alone.
-            </div>
-
-            <br>
-
-            <strong style="color:#f8fafc;">
-                Recall became the priority
-            </strong>
-
-            <p style="color:#94a3b8; line-height:1.7;">
-                The baseline Logistic Regression model achieved
-                <strong style="color:#f8fafc;">50.00% recall</strong>.
-                After applying feature scaling, SMOTE and hyperparameter
-                tuning, recall increased to
-                <strong style="color:#67e8f9;">75.93%</strong>.
-            </p>
-
+        <div class="section-title">
+            Executive Overview
         </div>
-        """,
-        unsafe_allow_html=True
-    )
 
-    st.markdown("### 🧠 Optimization Strategy")
-
-    c1, c2, c3 = st.columns(3)
-
-    with c1:
-        st.markdown(
-            """
-            <div class="glass-card">
-                <div style="font-size:1.4rem;">01</div>
-                <h4>Scaling</h4>
-                <p style="color:#94a3b8;">
-                StandardScaler places numerical features on comparable
-                scales before model training.
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with c2:
-        st.markdown(
-            """
-            <div class="glass-card">
-                <div style="font-size:1.4rem;">02</div>
-                <h4>Balancing</h4>
-                <p style="color:#94a3b8;">
-                SMOTE generates synthetic minority-class training examples
-                to improve representation during training.
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with c3:
-        st.markdown(
-            """
-            <div class="glass-card">
-                <div style="font-size:1.4rem;">03</div>
-                <h4>Search</h4>
-                <p style="color:#94a3b8;">
-                GridSearchCV evaluates Logistic Regression configurations
-                using F1 as the optimization objective.
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    st.markdown(
+        <div class="section-description">
+            A high-level view of the dataset, model performance,
+            optimization strategy and analytical findings.
+        </div>
         """
-        <div class="info-box">
-            <strong>Key analytical lesson:</strong>
-            The optimized model sacrificed some overall accuracy and
-            precision in exchange for substantially higher recall.
-            For a screening-oriented model, this is an intentional
-            trade-off rather than a failure.
-        </div>
-        """,
-        unsafe_allow_html=True
     )
 
+    # --------------------------------------------------------
+    # DATASET METRICS
+    # --------------------------------------------------------
 
-# ============================================================
-# RISK ASSESSMENT PAGE
-# ============================================================
+    total_patients = 768
+    diabetic = 268
+    non_diabetic = 500
 
-elif page == "🔬 Risk Assessment":
+    if data is not None and target_column is not None:
 
-    st.markdown("## 🔬 Diabetes Risk Assessment")
+        total_patients = len(data)
 
-    st.caption(
-        "Enter patient information to generate a model-based diabetes "
-        "risk estimate."
+        diabetic = int(
+            (data[target_column] == 1).sum()
+        )
+
+        non_diabetic = int(
+            (data[target_column] == 0).sum()
+        )
+
+    diabetic_pct = (
+        diabetic / total_patients * 100
+        if total_patients
+        else 0
     )
 
-    if model is None:
+    m1, m2, m3, m4, m5 = st.columns(5)
 
-        st.error(
-            "The trained model could not be loaded. "
-            "Please make sure diabetes_risk_prediction_model.pkl "
-            "is in the same folder as app.py."
-        )
+    metric_cards = [
 
-    else:
-
-        tab_single, tab_batch = st.tabs(
-            [
-                "👤 Single Patient",
-                "📂 Batch Assessment"
-            ]
-        )
-
-        # ====================================================
-        # SINGLE PATIENT
-        # ====================================================
-
-        with tab_single:
-
-            st.markdown(
-                """
-                <div class="glass-card">
-                    <div class="card-title">
-                        Patient Information
-                    </div>
-                    <div class="card-subtitle">
-                        Enter the available health measurements below.
-                        The model expects the same eight features used
-                        during development.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            c1, c2, c3, c4 = st.columns(4)
-
-            with c1:
-                pregnancies = st.number_input(
-                    "Pregnancies",
-                    min_value=0,
-                    max_value=20,
-                    value=1,
-                    step=1
-                )
-
-            with c2:
-                glucose = st.number_input(
-                    "Glucose (mg/dL)",
-                    min_value=0.0,
-                    max_value=300.0,
-                    value=120.0,
-                    step=1.0
-                )
-
-            with c3:
-                blood_pressure = st.number_input(
-                    "Blood Pressure (mmHg)",
-                    min_value=0.0,
-                    max_value=200.0,
-                    value=70.0,
-                    step=1.0
-                )
-
-            with c4:
-                skin_thickness = st.number_input(
-                    "Skin Thickness (mm)",
-                    min_value=0.0,
-                    max_value=100.0,
-                    value=20.0,
-                    step=1.0
-                )
-
-            c5, c6, c7, c8 = st.columns(4)
-
-            with c5:
-                insulin = st.number_input(
-                    "Insulin (µU/mL)",
-                    min_value=0.0,
-                    max_value=1000.0,
-                    value=80.0,
-                    step=1.0
-                )
-
-            with c6:
-                bmi = st.number_input(
-                    "BMI",
-                    min_value=0.0,
-                    max_value=80.0,
-                    value=32.0,
-                    step=0.1
-                )
-
-            with c7:
-                pedigree = st.number_input(
-                    "Diabetes Pedigree Function",
-                    min_value=0.0,
-                    max_value=3.0,
-                    value=0.47,
-                    step=0.01,
-                    format="%.2f"
-                )
-
-            with c8:
-                age = st.number_input(
-                    "Age",
-                    min_value=1,
-                    max_value=120,
-                    value=33,
-                    step=1
-                )
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            predict_clicked = st.button(
-                "🩺 Assess Diabetes Risk",
-                use_container_width=True
-            )
-
-            if predict_clicked:
-
-                patient_data = pd.DataFrame(
-                    [[
-                        pregnancies,
-                        glucose,
-                        blood_pressure,
-                        skin_thickness,
-                        insulin,
-                        bmi,
-                        pedigree,
-                        age
-                    ]],
-                    columns=FEATURES
-                )
-
-                try:
-
-                    prediction = int(
-                        model.predict(patient_data)[0]
-                    )
-
-                    probability = float(
-                        model.predict_proba(patient_data)[0][1]
-                    )
-
-                    probability_percent = probability * 100
-
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    # -----------------------------------------
-                    # RESULT
-                    # -----------------------------------------
-
-                    if prediction == 1:
-
-                        st.markdown(
-                            f"""
-                            <div class="risk-danger">
-
-                                <div class="risk-label">
-                                    MODEL RESULT
-                                </div>
-
-                                <div class="risk-title">
-                                    ⚠️ Elevated Diabetes Risk
-                                </div>
-
-                                <div class="risk-text">
-                                    The model classified this input as
-                                    <strong>positive for diabetes risk</strong>.
-                                    The estimated model probability is
-                                    <strong>{probability_percent:.1f}%</strong>.
-                                </div>
-
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-
-                    else:
-
-                        st.markdown(
-                            f"""
-                            <div class="risk-safe">
-
-                                <div class="risk-label">
-                                    MODEL RESULT
-                                </div>
-
-                                <div class="risk-title">
-                                    ✓ Lower Predicted Risk
-                                </div>
-
-                                <div class="risk-text">
-                                    The model classified this input as
-                                    <strong>negative for diabetes risk</strong>.
-                                    The estimated model probability is
-                                    <strong>{probability_percent:.1f}%</strong>.
-                                </div>
-
-                            </div>
-                            """,
-                            unsafe_allow_html=True
-                        )
-
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    # -----------------------------------------
-                    # PROBABILITY
-                    # -----------------------------------------
-
-                    st.markdown("### 📈 Model Probability")
-
-                    st.markdown(
-                        f"""
-                        <div class="glass-card">
-
-                            <div style="
-                                display:flex;
-                                justify-content:space-between;
-                                align-items:center;
-                            ">
-                                <span style="color:#94a3b8;">
-                                    Estimated probability of positive class
-                                </span>
-
-                                <strong style="
-                                    color:#67e8f9;
-                                    font-size:1.25rem;
-                                ">
-                                    {probability_percent:.1f}%
-                                </strong>
-                            </div>
-
-                            <div class="progress-track">
-                                <div class="progress-fill"
-                                     style="width:{min(probability_percent,100):.2f}%;">
-                                </div>
-                            </div>
-
-                            <div style="
-                                color:#64748b;
-                                font-size:0.76rem;
-                                margin-top:0.7rem;
-                            ">
-                                This is the model's estimated probability,
-                                not a clinical probability or diagnosis.
-                            </div>
-
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                    # -----------------------------------------
-                    # INPUT SUMMARY
-                    # -----------------------------------------
-
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    st.markdown("### 📋 Assessment Summary")
-
-                    summary_cols = st.columns(4)
-
-                    summary = [
-                        ("Glucose", f"{glucose:.1f} mg/dL"),
-                        ("BMI", f"{bmi:.1f}"),
-                        ("Age", f"{age} years"),
-                        ("Blood Pressure", f"{blood_pressure:.1f} mmHg")
-                    ]
-
-                    for col, (label, value) in zip(
-                        summary_cols,
-                        summary
-                    ):
-                        with col:
-                            st.markdown(
-                                f"""
-                                <div class="metric-card">
-                                    <div class="metric-label">
-                                        {label}
-                                    </div>
-                                    <div class="metric-value"
-                                         style="font-size:1.45rem;">
-                                        {value}
-                                    </div>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-
-                    st.markdown("<br>", unsafe_allow_html=True)
-
-                    st.markdown(
-                        """
-                        <div class="warning-box">
-                            <strong>Important:</strong>
-                            A model prediction should not be interpreted
-                            as confirmation that a person does or does
-                            not have diabetes. If you have health concerns,
-                            discuss the result with a qualified healthcare
-                            professional and use appropriate clinical tests.
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-
-                except Exception as e:
-
-                    st.error(
-                        "Prediction could not be completed. "
-                        "Please verify that the model file matches the "
-                        "eight expected input features."
-                    )
-
-                    st.code(str(e))
-
-
-        # ====================================================
-        # BATCH ASSESSMENT
-        # ====================================================
-
-        with tab_batch:
-
-            st.markdown(
-                """
-                <div class="glass-card">
-
-                    <div class="card-title">
-                        📂 Batch Risk Assessment
-                    </div>
-
-                    <div class="card-subtitle">
-                        Upload a CSV containing patient records using
-                        the same eight feature names expected by the model.
-                    </div>
-
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # -----------------------------------------------
-            # TEMPLATE
-            # -----------------------------------------------
-
-            template_data = pd.DataFrame({
-                "Pregnancies": [1],
-                "Glucose": [120.0],
-                "BloodPressure": [70.0],
-                "SkinThickness": [20.0],
-                "Insulin": [80.0],
-                "BMI": [32.0],
-                "DiabetesPedigreeFunction": [0.47],
-                "Age": [33]
-            })
-
-            st.download_button(
-                label="⬇️ Download CSV Template",
-                data=template_data.to_csv(index=False),
-                file_name="diabetes_prediction_template.csv",
-                mime="text/csv"
-            )
-
-            uploaded_file = st.file_uploader(
-                "Upload patient CSV",
-                type=["csv"]
-            )
-
-            if uploaded_file is not None:
-
-                try:
-
-                    batch_data = pd.read_csv(uploaded_file)
-
-                    missing_features = [
-                        feature
-                        for feature in FEATURES
-                        if feature not in batch_data.columns
-                    ]
-
-                    if missing_features:
-
-                        st.error(
-                            "The uploaded CSV is missing these required "
-                            f"columns: {', '.join(missing_features)}"
-                        )
-
-                    else:
-
-                        input_data = batch_data[FEATURES].copy()
-
-                        # Convert values to numeric
-                        for feature in FEATURES:
-                            input_data[feature] = pd.to_numeric(
-                                input_data[feature],
-                                errors="coerce"
-                            )
-
-                        invalid_rows = input_data.isnull().any(axis=1).sum()
-
-                        if invalid_rows > 0:
-
-                            st.warning(
-                                f"{invalid_rows} row(s) contain missing or "
-                                "non-numeric values. Those rows will be "
-                                "excluded from prediction."
-                            )
-
-                        valid_mask = ~input_data.isnull().any(axis=1)
-
-                        valid_input = input_data.loc[
-                            valid_mask
-                        ].copy()
-
-                        if len(valid_input) == 0:
-
-                            st.error(
-                                "No valid patient records were found "
-                                "after checking the uploaded file."
-                            )
-
-                        else:
-
-                            batch_predictions = model.predict(
-                                valid_input
-                            )
-
-                            batch_probabilities = model.predict_proba(
-                                valid_input
-                            )[:, 1]
-
-                            results = batch_data.loc[
-                                valid_input.index
-                            ].copy()
-
-                            results["Predicted Outcome"] = np.where(
-                                batch_predictions == 1,
-                                "Higher Diabetes Risk",
-                                "Lower Diabetes Risk"
-                            )
-
-                            results["Risk Probability (%)"] = (
-                                batch_probabilities * 100
-                            ).round(2)
-
-                            results["Model Prediction"] = batch_predictions
-
-                            # --------------------------------
-                            # SUMMARY
-                            # --------------------------------
-
-                            total = len(results)
-
-                            positive = int(
-                                (batch_predictions == 1).sum()
-                            )
-
-                            negative = int(
-                                (batch_predictions == 0).sum()
-                            )
-
-                            positive_rate = (
-                                positive / total * 100
-                            )
-
-                            st.markdown("<br>", unsafe_allow_html=True)
-
-                            m1, m2, m3 = st.columns(3)
-
-                            with m1:
-                                st.metric(
-                                    "Records Assessed",
-                                    total
-                                )
-
-                            with m2:
-                                st.metric(
-                                    "Higher Risk",
-                                    positive
-                                )
-
-                            with m3:
-                                st.metric(
-                                    "Higher Risk %",
-                                    f"{positive_rate:.1f}%"
-                                )
-
-                            st.markdown("<br>", unsafe_allow_html=True)
-
-                            st.markdown("### Prediction Results")
-
-                            st.dataframe(
-                                results,
-                                use_container_width=True,
-                                hide_index=True
-                            )
-
-                            csv_results = results.to_csv(
-                                index=False
-                            )
-
-                            st.download_button(
-                                label="⬇️ Download Prediction Results",
-                                data=csv_results,
-                                file_name=(
-                                    "diabetes_risk_predictions.csv"
-                                ),
-                                mime="text/csv"
-                            )
-
-                            st.markdown(
-                                """
-                                <div class="warning-box">
-                                    <strong>Batch assessment reminder:</strong>
-                                    These predictions are model-generated
-                                    screening estimates. They should not be
-                                    treated as automated diagnoses.
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-
-                except Exception as e:
-
-                    st.error(
-                        "The uploaded file could not be processed."
-                    )
-
-                    st.code(str(e))
-
-
-# ============================================================
-# DATASET PAGE
-# ============================================================
-
-elif page == "📊 Dataset":
-
-    st.markdown("## 📊 Dataset Intelligence")
-
-    st.caption(
-        "Overview of the dataset used during model development."
-    )
-
-    if dataset is None:
-
-        st.warning(
-            "diabetes_nan.csv was not found in the application directory."
-        )
-
-    else:
-
-        total = len(dataset)
-
-        target_counts = dataset["outcome(target)"].value_counts()
-
-        non_diabetic = int(target_counts.get(0, 0))
-        diabetic = int(target_counts.get(1, 0))
-
-        c1, c2, c3, c4 = st.columns(4)
-
-        overview = [
-            ("TOTAL RECORDS", total, "Patients"),
-            ("FEATURES", 8, "Predictor variables"),
-            ("NO DIABETES", non_diabetic, "65.1%"),
-            ("DIABETES", diabetic, "34.9%")
-        ]
-
-        for col, (label, value, delta) in zip(
-            [c1, c2, c3, c4],
-            overview
-        ):
-
-            with col:
-
-                st.markdown(
-                    f"""
-                    <div class="metric-card">
-
-                        <div class="metric-label">
-                            {label}
-                        </div>
-
-                        <div class="metric-value">
-                            {value}
-                        </div>
-
-                        <div class="metric-delta">
-                            {delta}
-                        </div>
-
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown("### Dataset Preview")
-
-        st.dataframe(
-            dataset.head(20),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.markdown("### Missing Data Audit")
-
-        missing = dataset.isnull().sum()
-
-        missing_table = pd.DataFrame({
-            "Feature": missing.index,
-            "Missing Values": missing.values,
-            "Missing %": (
-                missing.values / len(dataset) * 100
-            ).round(2)
-        })
-
-        st.dataframe(
-            missing_table,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.markdown(
-            """
-            <div class="info-box">
-
-                <strong>Preprocessing:</strong>
-                Missing values in Glucose, BloodPressure,
-                SkinThickness, Insulin and BMI were handled using
-                median imputation during model development.
-
-                The model itself is loaded from the trained pipeline,
-                which includes the optimized preprocessing and learning
-                stages.
-
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-
-# ============================================================
-# MODEL INTELLIGENCE
-# ============================================================
-
-elif page == "🧠 Model Intelligence":
-
-    st.markdown("## 🧠 Model Intelligence")
-
-    st.caption(
-        "How the trained model was constructed and optimized."
-    )
-
-    st.markdown(
-        """
-        <div class="glass-card">
-
-            <div class="card-title">
-                Logistic Regression + Scaling + SMOTE + GridSearchCV
-            </div>
-
-            <p style="color:#94a3b8; line-height:1.7;">
-                The final model is a Logistic Regression classifier
-                embedded inside an imbalanced-learn pipeline.
-                The pipeline standardizes features, applies SMOTE
-                during training and selects model hyperparameters
-                through cross-validated grid search.
-            </p>
-
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    stages = [
         (
-            "01",
-            "Data Preparation",
-            "Missing clinical values were addressed using median imputation."
+            m1,
+            "PATIENT RECORDS",
+            f"{total_patients:,}",
+            "Development dataset"
         ),
+
         (
-            "02",
-            "Train/Test Split",
-            "80% of records were used for training and 20% for final testing, with stratification."
+            m2,
+            "DIABETIC",
+            f"{diabetic:,}",
+            f"{diabetic_pct:.1f}% of records"
         ),
+
         (
-            "03",
-            "Feature Scaling",
-            "StandardScaler transformed the numerical features to comparable scales."
+            m3,
+            "OPTIMIZED RECALL",
+            "75.93%",
+            "+25.93 percentage points"
         ),
+
         (
-            "04",
-            "Class Balancing",
-            "SMOTE generated synthetic minority-class examples during training."
+            m4,
+            "F1 SCORE",
+            "63.08%",
+            "Optimized model"
         ),
+
         (
-            "05",
-            "Hyperparameter Search",
-            "GridSearchCV tested Logistic Regression configurations using 5-fold cross-validation."
-        ),
-        (
-            "06",
-            "Final Evaluation",
-            "The optimized pipeline was evaluated on the held-out test set."
+            m5,
+            "ROC-AUC",
+            "78.69%",
+            "Discrimination"
         )
     ]
 
-    for number, title, description in stages:
-
-        st.markdown(
-            f"""
-            <div class="glass-card section-card">
-
-                <div style="
-                    color:#67e8f9;
-                    font-weight:800;
-                    font-size:0.75rem;
-                    letter-spacing:0.1em;
-                ">
-                    {number}
-                </div>
-
-                <div style="
-                    color:#f8fafc;
-                    font-size:1.05rem;
-                    font-weight:750;
-                    margin-top:0.3rem;
-                ">
-                    {title}
-                </div>
-
-                <div style="
-                    color:#94a3b8;
-                    margin-top:0.4rem;
-                    line-height:1.6;
-                ">
-                    {description}
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.markdown("### 🔑 Selected Configuration")
-
-    config = pd.DataFrame({
-        "Parameter": [
-            "Algorithm",
-            "C",
-            "Solver",
-            "Class Weight",
-            "Cross-Validation",
-            "Optimization Metric"
-        ],
-        "Selected Value": [
-            "Logistic Regression",
-            "0.001",
-            "liblinear",
-            "None",
-            "5-fold",
-            "F1 Score"
-        ]
-    })
-
-    st.dataframe(
-        config,
-        use_container_width=True,
-        hide_index=True
-    )
-
-
-# ============================================================
-# EVALUATION PAGE
-# ============================================================
-
-elif page == "⚖️ Evaluation":
-
-    st.markdown("## ⚖️ Model Evaluation")
-
-    st.caption(
-        "Performance on the held-out test set."
-    )
-
-    evaluation = [
-        ("Accuracy", "68.83%", "Overall classification accuracy"),
-        ("Precision", "53.95%", "Positive predictions that were correct"),
-        ("Recall", "75.93%", "Actual positive cases correctly identified"),
-        ("F1 Score", "63.08%", "Balance between precision and recall"),
-        ("ROC-AUC", "78.69%", "Ability to distinguish the two classes")
-    ]
-
-    cols = st.columns(5)
-
-    for col, (label, value, description) in zip(
-        cols,
-        evaluation
-    ):
+    for col, label, value, delta in metric_cards:
 
         with col:
 
-            st.markdown(
+            st.html(
                 f"""
                 <div class="metric-card">
 
@@ -1638,42 +832,119 @@ elif page == "⚖️ Evaluation":
                         {value}
                     </div>
 
-                    <div style="
-                        color:#64748b;
-                        font-size:0.72rem;
-                        line-height:1.4;
-                        margin-top:0.35rem;
-                    ">
-                        {description}
+                    <div class="metric-delta">
+                        {delta}
                     </div>
 
                 </div>
-                """,
-                unsafe_allow_html=True
+                """
             )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # --------------------------------------------------------
+    # KEY INSIGHTS
+    # --------------------------------------------------------
 
-    st.markdown("### Baseline → Optimized")
+    st.html(
+        """
+        <div class="section-title">
+            Why the optimized model matters
+        </div>
+        """
+    )
+
+    left, right = st.columns(2)
+
+    with left:
+
+        st.html(
+            f"""
+            <div class="card">
+
+                <h3>🎯 Recall became the priority</h3>
+
+                <p>
+                    The baseline model achieved
+                    <strong>50.00%</strong> recall.
+                </p>
+
+                <p>
+                    After optimization, recall increased to
+                    <strong>75.93%</strong>.
+                </p>
+
+                <p>
+                    In this screening-oriented experiment,
+                    the optimized model identified a larger
+                    proportion of positive cases in the
+                    evaluated test set.
+                </p>
+
+            </div>
+            """
+        )
+
+    with right:
+
+        st.html(
+            f"""
+            <div class="card">
+
+                <h3>🧠 Optimization strategy</h3>
+
+                <p>
+                    <strong>01 — Scaling</strong><br>
+                    StandardScaler standardized feature magnitudes.
+                </p>
+
+                <p>
+                    <strong>02 — Balancing</strong><br>
+                    SMOTE generated synthetic minority-class
+                    training examples.
+                </p>
+
+                <p>
+                    <strong>03 — Search</strong><br>
+                    GridSearchCV searched Logistic Regression
+                    configurations using F1 scoring.
+                </p>
+
+            </div>
+            """
+        )
+
+    # --------------------------------------------------------
+    # BASELINE VS OPTIMIZED
+    # --------------------------------------------------------
+
+    st.html(
+        """
+        <div class="section-title">
+            Baseline → Optimized
+        </div>
+        """
+    )
 
     comparison = pd.DataFrame({
+
         "Metric": [
             "Accuracy",
             "Precision",
             "Recall",
             "F1 Score"
         ],
+
         "Baseline": [
-            "70.13%",
-            "58.70%",
-            "50.00%",
-            "54.00%"
+            70.13,
+            58.70,
+            50.00,
+            54.00
         ],
+
         "Optimized": [
-            "68.83%",
-            "53.95%",
-            "75.93%",
-            "63.08%"
+            68.83,
+            53.95,
+            75.93,
+            63.08
         ]
     })
 
@@ -1683,216 +954,1198 @@ elif page == "⚖️ Evaluation":
         hide_index=True
     )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.caption(
+        "The optimized model traded some accuracy and precision "
+        "for a substantial increase in recall."
+    )
 
-    st.markdown(
+    # --------------------------------------------------------
+    # FEATURE INTELLIGENCE
+    # --------------------------------------------------------
+
+    st.html(
         """
-        <div class="info-box">
+        <div class="section-title">
+            📌 Feature Intelligence
+        </div>
 
-            <strong>What changed?</strong><br><br>
+        <div class="section-description">
+            Logistic Regression coefficients from the optimized
+            model. Positive coefficients indicate association with
+            the model's positive class; they do not establish causality.
+        </div>
+        """
+    )
 
-            Recall increased from <strong>50.00%</strong> to
-            <strong>75.93%</strong>, while F1 increased from
-            <strong>54.00%</strong> to <strong>63.08%</strong>.
+    feature_df = pd.DataFrame(
+        FEATURE_COEFFICIENTS.items(),
+        columns=["Feature", "Coefficient"]
+    )
 
-            The trade-off was a reduction in overall accuracy and
-            precision. For a screening-oriented application, the
-            improvement in recall is particularly important because
-            fewer positive cases were missed in the evaluated test set.
+    feature_df = feature_df.sort_values(
+        "Coefficient",
+        ascending=False
+    )
+
+    st.bar_chart(
+        feature_df.set_index("Feature")
+    )
+
+
+# ============================================================
+# PAGE 2 — RISK ASSESSMENT
+# ============================================================
+
+elif page == "🔬 Risk Assessment":
+
+    st.html(
+        """
+        <div class="section-title">
+            🔬 Patient Risk Assessment
+        </div>
+
+        <div class="section-description">
+            Enter the required patient-level features to generate
+            a model-based classification estimate.
+        </div>
+        """
+    )
+
+    if model is None:
+
+        st.error(
+            "The trained model could not be loaded."
+        )
+
+        if model_error:
+            st.code(model_error)
+
+    else:
+
+        st.html(
+            f"""
+            <div class="card">
+
+                <h3>Model Pipeline</h3>
+
+                <p>
+                    Logistic Regression → StandardScaler →
+                    SMOTE → GridSearchCV-selected configuration
+                </p>
+
+                <p>
+                    The model was trained on eight patient-level
+                    features from the project dataset.
+                </p>
+
+            </div>
+            """
+        )
+
+        # ----------------------------------------------------
+        # INPUT FORM
+        # ----------------------------------------------------
+
+        with st.form("risk_assessment_form"):
+
+            st.markdown("### Patient Features")
+
+            c1, c2, c3 = st.columns(3)
+
+            with c1:
+
+                pregnancies = st.number_input(
+                    "Pregnancies",
+                    min_value=0,
+                    max_value=20,
+                    value=3,
+                    step=1
+                )
+
+                glucose = st.number_input(
+                    "Glucose (mg/dL)",
+                    min_value=0.0,
+                    max_value=300.0,
+                    value=120.0,
+                    step=1.0
+                )
+
+                blood_pressure = st.number_input(
+                    "Blood Pressure (mmHg)",
+                    min_value=0.0,
+                    max_value=200.0,
+                    value=72.0,
+                    step=1.0
+                )
+
+            with c2:
+
+                skin_thickness = st.number_input(
+                    "Skin Thickness (mm)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=23.0,
+                    step=1.0
+                )
+
+                insulin = st.number_input(
+                    "Insulin (μU/mL)",
+                    min_value=0.0,
+                    max_value=1000.0,
+                    value=125.0,
+                    step=1.0
+                )
+
+                bmi = st.number_input(
+                    "BMI",
+                    min_value=0.0,
+                    max_value=80.0,
+                    value=32.0,
+                    step=0.1
+                )
+
+            with c3:
+
+                pedigree = st.number_input(
+                    "Diabetes Pedigree Function",
+                    min_value=0.0,
+                    max_value=3.0,
+                    value=0.47,
+                    step=0.01
+                )
+
+                age = st.number_input(
+                    "Age",
+                    min_value=1,
+                    max_value=120,
+                    value=33,
+                    step=1
+                )
+
+                st.write("")
+
+                submitted = st.form_submit_button(
+                    "🧠 Assess Risk",
+                    use_container_width=True
+                )
+
+        # ----------------------------------------------------
+        # PREDICTION
+        # ----------------------------------------------------
+
+        if submitted:
+
+            patient = pd.DataFrame(
+                [[
+                    pregnancies,
+                    glucose,
+                    blood_pressure,
+                    skin_thickness,
+                    insulin,
+                    bmi,
+                    pedigree,
+                    age
+                ]],
+                columns=EXPECTED_FEATURES
+            )
+
+            try:
+
+                prediction = int(
+                    model.predict(patient)[0]
+                )
+
+                probability = None
+
+                if hasattr(model, "predict_proba"):
+
+                    probability = float(
+                        model.predict_proba(patient)[0][1]
+                    )
+
+                st.session_state.assessment_result = {
+
+                    "prediction": prediction,
+
+                    "probability": probability,
+
+                    "patient": patient
+                }
+
+            except Exception as error:
+
+                st.error(
+                    "Prediction failed."
+                )
+
+                st.exception(error)
+
+        # ----------------------------------------------------
+        # DISPLAY RESULT
+        # ----------------------------------------------------
+
+        result = st.session_state.assessment_result
+
+        if result is not None:
+
+            prediction = result["prediction"]
+            probability = result["probability"]
+            patient = result["patient"]
+
+            st.divider()
+
+            st.html(
+                """
+                <div class="section-title">
+                    Assessment Result
+                </div>
+                """
+            )
+
+            if probability is not None:
+
+                probability_percent = probability * 100
+
+                if probability < 0.30:
+
+                    band = "Lower"
+
+                elif probability < 0.60:
+
+                    band = "Intermediate"
+
+                else:
+
+                    band = "Higher"
+
+                r1, r2, r3 = st.columns(3)
+
+                with r1:
+
+                    st.metric(
+                        "Model Probability",
+                        f"{probability_percent:.1f}%"
+                    )
+
+                with r2:
+
+                    st.metric(
+                        "Classification",
+                        (
+                            "Positive (1)"
+                            if prediction == 1
+                            else "Negative (0)"
+                        )
+                    )
+
+                with r3:
+
+                    st.metric(
+                        "Risk Band",
+                        band
+                    )
+
+                st.progress(
+                    min(max(probability, 0.0), 1.0)
+                )
+
+                # ------------------------------------------------
+                # RESULT MESSAGE
+                # ------------------------------------------------
+
+                if prediction == 1:
+
+                    st.html(
+                        f"""
+                        <div class="result-positive">
+
+                            <div class="result-title">
+                                ⚠️ Positive Model Classification
+                            </div>
+
+                            <div class="result-text">
+
+                                The model classified this patient
+                                as <strong>Class 1</strong>.
+
+                                <br><br>
+
+                                Model-estimated positive-class
+                                probability:
+                                <strong>
+                                    {probability_percent:.1f}%
+                                </strong>
+
+                                <br><br>
+
+                                This is a screening flag only and
+                                must not be interpreted as a diagnosis.
+
+                            </div>
+
+                        </div>
+                        """
+                    )
+
+                elif band == "Intermediate":
+
+                    st.html(
+                        f"""
+                        <div class="result-intermediate">
+
+                            <div class="result-title">
+                                🟡 Intermediate Model Estimate
+                            </div>
+
+                            <div class="result-text">
+
+                                The model classified this patient
+                                as <strong>Class 0</strong>, but the
+                                estimated positive-class probability
+                                is intermediate.
+
+                                <br><br>
+
+                                Estimated probability:
+                                <strong>
+                                    {probability_percent:.1f}%
+                                </strong>
+
+                                <br><br>
+
+                                Clinical assessment should determine
+                                the appropriate next step.
+
+                            </div>
+
+                        </div>
+                        """
+                    )
+
+                else:
+
+                    st.html(
+                        f"""
+                        <div class="result-negative">
+
+                            <div class="result-title">
+                                ✓ Negative Model Classification
+                            </div>
+
+                            <div class="result-text">
+
+                                The model classified this patient
+                                as <strong>Class 0</strong>.
+
+                                <br><br>
+
+                                Model-estimated positive-class
+                                probability:
+                                <strong>
+                                    {probability_percent:.1f}%
+                                </strong>
+
+                                <br><br>
+
+                                A negative model result does not
+                                rule out diabetes.
+
+                            </div>
+
+                        </div>
+                        """
+                    )
+
+            # ----------------------------------------------------
+            # INPUT SUMMARY
+            # ----------------------------------------------------
+
+            st.markdown("### Patient Input Summary")
+
+            st.dataframe(
+                patient.T.rename(
+                    columns={0: "Patient Value"}
+                ),
+                use_container_width=True
+            )
+
+            # ----------------------------------------------------
+            # DOWNLOAD REPORT
+            # ----------------------------------------------------
+
+            report_probability = (
+                f"{probability_percent:.2f}%"
+                if probability is not None
+                else "Unavailable"
+            )
+
+            report = f"""
+DIABETES RISK INTELLIGENCE
+MACHINE LEARNING SCREENING REPORT
+============================================================
+
+Assessment Date:
+{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+MODEL RESULT
+------------------------------------------------------------
+
+Predicted Class:
+{"Positive (1)" if prediction == 1 else "Negative (0)"}
+
+Model Probability:
+{report_probability}
+
+Risk Band:
+{band if probability is not None else "Unavailable"}
+
+
+PATIENT INPUTS
+------------------------------------------------------------
+
+Pregnancies: {pregnancies}
+Glucose: {glucose}
+BloodPressure: {blood_pressure}
+SkinThickness: {skin_thickness}
+Insulin: {insulin}
+BMI: {bmi}
+DiabetesPedigreeFunction: {pedigree}
+Age: {age}
+
+
+MODEL PERFORMANCE
+------------------------------------------------------------
+
+Accuracy: 68.83%
+Precision: 53.95%
+Recall: 75.93%
+F1 Score: 63.08%
+ROC-AUC: 78.69%
+
+
+CLINICAL SAFETY NOTICE
+------------------------------------------------------------
+
+This application is an educational and research prototype.
+
+It is NOT a medical diagnosis.
+
+The result must not replace professional medical
+assessment, laboratory testing, or established clinical
+screening protocols.
+
+Model probability should not be interpreted as a clinically
+calibrated probability unless appropriate calibration and
+external validation have been performed.
+"""
+
+            st.download_button(
+                "📄 Download Assessment Report",
+                data=report,
+                file_name="diabetes_risk_assessment.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+
+
+# ============================================================
+# PAGE 3 — DATASET
+# ============================================================
+
+elif page == "📊 Dataset":
+
+    st.html(
+        """
+        <div class="section-title">
+            📊 Dataset Explorer
+        </div>
+
+        <div class="section-description">
+            Explore the dataset used during development of the
+            diabetes risk prediction model.
+        </div>
+        """
+    )
+
+    if data is None:
+
+        st.error(
+            "Dataset could not be loaded."
+        )
+
+        if data_error:
+            st.code(data_error)
+
+    else:
+
+        positive = 0
+        negative = 0
+
+        if target_column is not None:
+
+            positive = int(
+                (data[target_column] == 1).sum()
+            )
+
+            negative = int(
+                (data[target_column] == 0).sum()
+            )
+
+        d1, d2, d3, d4 = st.columns(4)
+
+        with d1:
+            st.metric(
+                "Records",
+                f"{len(data):,}"
+            )
+
+        with d2:
+            st.metric(
+                "Columns",
+                f"{len(data.columns):,}"
+            )
+
+        with d3:
+            st.metric(
+                "Diabetes",
+                f"{positive:,}"
+            )
+
+        with d4:
+            st.metric(
+                "No Diabetes",
+                f"{negative:,}"
+            )
+
+        st.divider()
+
+        # ----------------------------------------------------
+        # TARGET DISTRIBUTION
+        # ----------------------------------------------------
+
+        left, right = st.columns(2)
+
+        with left:
+
+            st.markdown("### Target Distribution")
+
+            target_display = pd.DataFrame({
+
+                "Class": [
+                    "No Diabetes",
+                    "Diabetes"
+                ],
+
+                "Patients": [
+                    negative,
+                    positive
+                ]
+            })
+
+            st.bar_chart(
+                target_display.set_index("Class")
+            )
+
+        with right:
+
+            st.markdown("### Missing Values")
+
+            missing = (
+                data.isnull()
+                .sum()
+                .sort_values(
+                    ascending=False
+                )
+            )
+
+            missing_positive = missing[
+                missing > 0
+            ]
+
+            if len(missing_positive):
+
+                st.bar_chart(
+                    missing_positive
+                )
+
+            else:
+
+                st.success(
+                    "✓ No missing values detected."
+                )
+
+        # ----------------------------------------------------
+        # DATA QUALITY
+        # ----------------------------------------------------
+
+        st.markdown("### 🔍 Data Quality")
+
+        q1, q2, q3 = st.columns(3)
+
+        with q1:
+
+            st.metric(
+                "Missing Cells",
+                f"{int(data.isnull().sum().sum()):,}"
+            )
+
+        with q2:
+
+            st.metric(
+                "Duplicate Rows",
+                f"{int(data.duplicated().sum()):,}"
+            )
+
+        with q3:
+
+            st.metric(
+                "Numeric Features",
+                f"{len(data.select_dtypes(include=np.number).columns):,}"
+            )
+
+        # ----------------------------------------------------
+        # DATASET PREVIEW
+        # ----------------------------------------------------
+
+        st.divider()
+
+        st.markdown("### Dataset Preview")
+
+        rows_to_show = st.slider(
+            "Rows to display",
+            min_value=10,
+            max_value=min(200, len(data)),
+            value=min(50, len(data)),
+            step=10
+        )
+
+        st.dataframe(
+            data.head(rows_to_show),
+            use_container_width=True,
+            hide_index=True
+        )
+
+
+# ============================================================
+# PAGE 4 — MODEL INTELLIGENCE
+# ============================================================
+
+elif page == "🧠 Model Intelligence":
+
+    st.html(
+        """
+        <div class="section-title">
+            🧠 Model Intelligence
+        </div>
+
+        <div class="section-description">
+            Technical view of the machine-learning architecture,
+            optimization strategy and learned feature coefficients.
+        </div>
+        """
+    )
+
+    # --------------------------------------------------------
+    # ARCHITECTURE
+    # --------------------------------------------------------
+
+    st.html(
+        f"""
+        <div class="card">
+
+            <h3>Model Architecture</h3>
+
+            <p>
+                <strong>Input Features</strong>
+                →
+                <strong>StandardScaler</strong>
+                →
+                <strong>SMOTE</strong>
+                →
+                <strong>Logistic Regression</strong>
+            </p>
+
+            <p>
+                GridSearchCV was used with 5-fold cross-validation
+                and F1 scoring to select the Logistic Regression
+                configuration.
+            </p>
 
         </div>
-        """,
-        unsafe_allow_html=True
+        """
     )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # --------------------------------------------------------
+    # PARAMETERS
+    # --------------------------------------------------------
 
-    st.markdown("### Confusion Matrix")
+    st.markdown("### ⚙️ Selected Configuration")
 
-    cm_data = pd.DataFrame(
-        [
-            ["True Negative", 65, "Correctly predicted negative"],
-            ["False Positive", 35, "Negative cases predicted positive"],
-            ["False Negative", 13, "Positive cases missed"],
-            ["True Positive", 41, "Correctly predicted positive"]
-        ],
-        columns=[
-            "Classification",
-            "Count",
-            "Meaning"
-        ]
-    )
+    parameter_df = pd.DataFrame({
+
+        "Parameter": list(BEST_PARAMETERS.keys()),
+
+        "Selected Value": list(
+            BEST_PARAMETERS.values()
+        )
+    })
 
     st.dataframe(
-        cm_data,
+        parameter_df,
         use_container_width=True,
         hide_index=True
     )
 
-    st.markdown(
-        """
-        <div class="warning-box">
+    # --------------------------------------------------------
+    # FEATURE COEFFICIENTS
+    # --------------------------------------------------------
 
-            <strong>Medical interpretation:</strong><br><br>
+    st.markdown("### 📌 Learned Feature Coefficients")
 
-            The optimized model reduced false negatives from
-            <strong>27 to 13</strong> on the evaluated test set.
-            However, it also produced more false positives.
+    coefficients = pd.DataFrame(
+        FEATURE_COEFFICIENTS.items(),
+        columns=[
+            "Feature",
+            "Coefficient"
+        ]
+    )
 
-            This demonstrates the central screening trade-off:
-            improving sensitivity can result in more patients being
-            referred for additional assessment.
+    coefficients = coefficients.sort_values(
+        "Coefficient",
+        ascending=False
+    )
 
-        </div>
-        """,
-        unsafe_allow_html=True
+    st.bar_chart(
+        coefficients.set_index("Feature")
+    )
+
+    st.caption(
+        "These coefficients describe the direction and relative "
+        "magnitude of association learned by the Logistic Regression "
+        "model after feature scaling. They do not prove causation."
+    )
+
+    st.dataframe(
+        coefficients,
+        use_container_width=True,
+        hide_index=True
     )
 
 
 # ============================================================
-# RESPONSIBLE AI PAGE
+# PAGE 5 — EVALUATION
+# ============================================================
+
+elif page == "⚖️ Evaluation":
+
+    st.html(
+        """
+        <div class="section-title">
+            ⚖️ Model Evaluation
+        </div>
+
+        <div class="section-description">
+            Evaluation of the optimized model on the held-out
+            test set.
+        </div>
+        """
+    )
+
+    # --------------------------------------------------------
+    # METRICS
+    # --------------------------------------------------------
+
+    e1, e2, e3, e4, e5 = st.columns(5)
+
+    evaluation_cards = [
+
+        (
+            e1,
+            "ACCURACY",
+            "68.83%"
+        ),
+
+        (
+            e2,
+            "PRECISION",
+            "53.95%"
+        ),
+
+        (
+            e3,
+            "RECALL",
+            "75.93%"
+        ),
+
+        (
+            e4,
+            "F1 SCORE",
+            "63.08%"
+        ),
+
+        (
+            e5,
+            "ROC-AUC",
+            "78.69%"
+        )
+    ]
+
+    for col, label, value in evaluation_cards:
+
+        with col:
+
+            st.html(
+                f"""
+                <div class="metric-card">
+
+                    <div class="metric-label">
+                        {label}
+                    </div>
+
+                    <div class="metric-value">
+                        {value}
+                    </div>
+
+                </div>
+                """
+            )
+
+    st.divider()
+
+    # --------------------------------------------------------
+    # CONFUSION MATRIX
+    # --------------------------------------------------------
+
+    st.markdown("### Confusion Matrix")
+
+    tn = CONFUSION_MATRIX["TN"]
+    fp = CONFUSION_MATRIX["FP"]
+    fn = CONFUSION_MATRIX["FN"]
+    tp = CONFUSION_MATRIX["TP"]
+
+    cm = pd.DataFrame(
+
+        [
+            [tn, fp],
+            [fn, tp]
+        ],
+
+        index=[
+            "Actual Negative",
+            "Actual Positive"
+        ],
+
+        columns=[
+            "Predicted Negative",
+            "Predicted Positive"
+        ]
+    )
+
+    st.dataframe(
+        cm,
+        use_container_width=True
+    )
+
+    # --------------------------------------------------------
+    # CONFUSION DETAILS
+    # --------------------------------------------------------
+
+    st.markdown("### Interpretation")
+
+    confusion_details = pd.DataFrame({
+
+        "Outcome": [
+            "True Negative",
+            "False Positive",
+            "False Negative",
+            "True Positive"
+        ],
+
+        "Count": [
+            tn,
+            fp,
+            fn,
+            tp
+        ],
+
+        "Meaning": [
+            "Correctly identified negative cases",
+            "Negative cases incorrectly flagged",
+            "Positive cases missed by the model",
+            "Correctly identified positive cases"
+        ]
+    })
+
+    st.dataframe(
+        confusion_details,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # --------------------------------------------------------
+    # METRIC RECONSTRUCTION
+    # --------------------------------------------------------
+
+    total = tn + fp + fn + tp
+
+    calculated_accuracy = (
+        (tn + tp) / total
+    )
+
+    calculated_precision = (
+        tp / (tp + fp)
+    )
+
+    calculated_recall = (
+        tp / (tp + fn)
+    )
+
+    calculated_f1 = (
+        2 *
+        calculated_precision *
+        calculated_recall /
+        (
+            calculated_precision +
+            calculated_recall
+        )
+    )
+
+    reconstructed = pd.DataFrame({
+
+        "Metric": [
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "F1 Score"
+        ],
+
+        "From Confusion Matrix": [
+            calculated_accuracy,
+            calculated_precision,
+            calculated_recall,
+            calculated_f1
+        ]
+    })
+
+    st.markdown("### 📐 Reconstructed Metrics")
+
+    st.dataframe(
+        reconstructed.style.format({
+            "From Confusion Matrix": "{:.2%}"
+        }),
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # --------------------------------------------------------
+    # SCREENING TRADE-OFF
+    # --------------------------------------------------------
+
+    st.html(
+        f"""
+        <div class="card">
+
+            <h3>🎯 Screening Trade-off</h3>
+
+            <p>
+                The optimized model produced
+                <strong>{fn} false negatives</strong>
+                and
+                <strong>{fp} false positives</strong>
+                on the evaluated test set.
+            </p>
+
+            <p>
+                Recall increased from
+                <strong>50.00%</strong>
+                in the baseline model to
+                <strong>75.93%</strong>
+                after optimization.
+            </p>
+
+            <p>
+                Higher recall does not by itself establish
+                clinical safety. External validation,
+                calibration, specificity, clinical thresholds,
+                fairness assessment and prospective evaluation
+                would still be required before clinical use.
+            </p>
+
+        </div>
+        """
+    )
+
+    # --------------------------------------------------------
+    # BASELINE VS OPTIMIZED
+    # --------------------------------------------------------
+
+    st.markdown("### Baseline vs Optimized")
+
+    comparison = pd.DataFrame({
+
+        "Metric": [
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "F1 Score"
+        ],
+
+        "Baseline": [
+            70.13,
+            58.70,
+            50.00,
+            54.00
+        ],
+
+        "Optimized": [
+            68.83,
+            53.95,
+            75.93,
+            63.08
+        ]
+    })
+
+    st.dataframe(
+        comparison,
+        use_container_width=True,
+        hide_index=True
+    )
+
+
+# ============================================================
+# PAGE 6 — RESPONSIBLE AI
 # ============================================================
 
 elif page == "🛡️ Responsible AI":
 
-    st.markdown("## 🛡️ Responsible AI & Safe Use")
+    st.html(
+        """
+        <div class="section-title">
+            🛡️ Responsible AI
+        </div>
 
-    st.caption(
-        "What users should understand before interpreting a prediction."
+        <div class="section-description">
+            Important limitations and requirements surrounding
+            the use of this machine-learning prototype.
+        </div>
+        """
     )
 
-    st.markdown(
-        """
-        <div class="danger-box">
+    st.html(
+        f"""
+        <div class="card">
 
-            <strong>🚨 This model does not diagnose diabetes.</strong>
+            <h3>⚠️ This is not a medical diagnostic system</h3>
 
-            <br><br>
-
-            It produces a machine-learning prediction from the
-            information supplied by the user. A prediction can be
-            wrong, incomplete or affected by limitations in the
-            underlying training data.
+            <p>
+                This project demonstrates the application of
+                machine learning to a diabetes classification
+                problem. It has not been clinically validated
+                and should not be used to diagnose, treat or
+                clear a patient.
+            </p>
 
         </div>
-        """,
-        unsafe_allow_html=True
+        """
     )
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # --------------------------------------------------------
+    # LIMITATIONS
+    # --------------------------------------------------------
 
-    c1, c2 = st.columns(2)
+    st.markdown("### Known Limitations")
 
-    with c1:
+    limitations = pd.DataFrame({
 
-        st.markdown(
-            """
-            <div class="glass-card">
+        "Area": [
+            "Dataset Size",
+            "External Validation",
+            "Clinical Calibration",
+            "Population Generalization",
+            "Threshold Selection",
+            "Clinical Oversight"
+        ],
 
-                <div class="card-title">
-                    ✅ Appropriate Use
-                </div>
+        "Status": [
+            "768 records",
+            "Not performed",
+            "Not performed",
+            "Not established",
+            "Not clinically selected",
+            "Required"
+        ]
+    })
 
-                <p style="color:#94a3b8; line-height:1.7;">
-                    • Educational exploration<br>
-                    • Research demonstrations<br>
-                    • Portfolio demonstrations<br>
-                    • Preliminary risk screening<br>
-                    • Supporting discussion with healthcare professionals
-                </p>
+    st.dataframe(
+        limitations,
+        use_container_width=True,
+        hide_index=True
+    )
 
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with c2:
-
-        st.markdown(
-            """
-            <div class="glass-card">
-
-                <div class="card-title">
-                    ❌ Inappropriate Use
-                </div>
-
-                <p style="color:#94a3b8; line-height:1.7;">
-                    • Confirming a diagnosis<br>
-                    • Replacing laboratory testing<br>
-                    • Making treatment decisions automatically<br>
-                    • Ignoring professional medical advice<br>
-                    • Using the prediction as the only clinical evidence
-                </p>
-
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    st.markdown("### 🧠 Why can the model be wrong?")
-
-    limitations = [
-        (
-            "Training Data",
-            "The model learned from a relatively small dataset of 768 records."
-        ),
-        (
-            "Generalization",
-            "Performance on this dataset does not guarantee the same performance in another population or clinical environment."
-        ),
-        (
-            "Input Quality",
-            "Incorrect, outdated or unusual patient measurements can affect predictions."
-        ),
-        (
-            "Model Limitations",
-            "Logistic Regression captures linear relationships and may not represent every biological interaction."
-        ),
-        (
-            "Clinical Context",
-            "Diabetes assessment involves clinical history, laboratory measurements and professional judgment beyond these eight features."
-        )
-    ]
-
-    for title, description in limitations:
-
-        st.markdown(
-            f"""
-            <div class="glass-card section-card">
-
-                <strong style="color:#f8fafc;">
-                    {title}
-                </strong>
-
-                <div style="
-                    color:#94a3b8;
-                    margin-top:0.35rem;
-                    line-height:1.6;
-                ">
-                    {description}
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+    # --------------------------------------------------------
+    # FUTURE REQUIREMENTS
+    # --------------------------------------------------------
 
     st.markdown(
-        """
-        <div class="info-box">
+        "### 🔬 Before Real-World Clinical Deployment"
+    )
 
-            <strong>Best practice:</strong>
+    requirements = pd.DataFrame({
 
-            Treat the prediction as one additional piece of information,
-            not the final answer. If a result raises concern, the
-            appropriate next step is professional medical evaluation
-            and clinically appropriate testing.
+        "Requirement": [
+            "External validation",
+            "Population evaluation",
+            "Probability calibration",
+            "Clinical threshold selection",
+            "Prospective evaluation",
+            "Clinical expert review",
+            "Privacy & security",
+            "Regulatory governance"
+        ],
+
+        "Status": [
+            "Required",
+            "Required",
+            "Required",
+            "Required",
+            "Required",
+            "Required",
+            "Required",
+            "Required"
+        ]
+    })
+
+    st.dataframe(
+        requirements,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    # --------------------------------------------------------
+    # RESEARCHER'S NOTE
+    # --------------------------------------------------------
+
+    st.html(
+        f"""
+        <div class="card">
+
+            <h3>🧑🏽‍💻 Researcher's Note</h3>
+
+            <p>
+                The purpose of this application is to demonstrate
+                how a machine-learning model can move from
+                experimentation in a notebook into an interactive
+                analytical interface.
+            </p>
+
+            <p>
+                The application should be viewed as a portfolio
+                and research prototype rather than a clinical
+                decision-making system.
+            </p>
 
         </div>
-        """,
-        unsafe_allow_html=True
+        """
     )
 
 
@@ -1900,13 +2153,15 @@ elif page == "🛡️ Responsible AI":
 # FOOTER
 # ============================================================
 
-st.markdown(
-    """
+st.html(
+    f"""
     <div class="footer">
 
-        <strong>🩺 Diabetes Risk Intelligence</strong>
+        <strong>
+            🩺 Diabetes Risk Intelligence
+        </strong>
 
-        <br>
+        <br><br>
 
         Diabetes Risk Prediction Using Machine Learning
 
@@ -1919,11 +2174,8 @@ st.markdown(
 
         <br>
 
-        <span>
-            Educational & Research Screening Prototype
-        </span>
+        Educational & Research Prototype
 
     </div>
-    """,
-    unsafe_allow_html=True
+    """
 )
